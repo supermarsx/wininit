@@ -59,7 +59,7 @@ $bloatApps = @(
     "Microsoft.BingSearch",          # Bing Search
     "Microsoft.Office.OneNote",      # OneNote UWP
     "Microsoft.MicrosoftOffice.OneNote",  # OneNote alternative package name
-    "*OneNote*"                      # Any remaining OneNote
+    "*OneNote*",                     # Any remaining OneNote
     "Microsoft.MixedReality.Portal",
     "Microsoft.3DBuilder",
     "Microsoft.Microsoft3DViewer",
@@ -210,9 +210,20 @@ $XboxPolicy = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR"
 if (-not (Test-Path $XboxPolicy)) { New-Item -Path $XboxPolicy -Force | Out-Null }
 Set-ItemProperty -Path $XboxPolicy -Name "AllowGameDVR" -Value 0 -Type DWord
 
-$GamingPolicy = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer"
-if (-not (Test-Path $GamingPolicy)) { New-Item -Path $GamingPolicy -Force | Out-Null }
-Set-ItemProperty -Path $GamingPolicy -Name "SettingsPageVisibility" -Value "hide:gaming-gamebar;gaming-gamedvr;gaming-broadcasting;gaming-gamemode;gaming-xboxnetworking" -Type String -ErrorAction SilentlyContinue
+# Append gaming/debloat pages to existing SettingsPageVisibility (don't overwrite modules 03/04)
+$debloatPages = "gaming-gamebar;gaming-gamedvr;gaming-gamemode;gaming-trueplay;gaming-xboxnetworking"
+$svPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+if (-not (Test-Path $svPath)) { New-Item -Path $svPath -Force | Out-Null }
+$currentSV = (Get-ItemProperty -Path $svPath -Name "SettingsPageVisibility" -ErrorAction SilentlyContinue).SettingsPageVisibility
+if ($currentSV) {
+    # Append only pages not already present
+    $existing = $currentSV -replace "^hide:", ""
+    $new = ($debloatPages -split ";") | Where-Object { $existing -notmatch [regex]::Escape($_) }
+    if ($new) { $currentSV = "$currentSV;$($new -join ';')" }
+    Set-ItemProperty -Path $svPath -Name "SettingsPageVisibility" -Value $currentSV -Type String
+} else {
+    Set-ItemProperty -Path $svPath -Name "SettingsPageVisibility" -Value "hide:$debloatPages" -Type String
+}
 
 Write-Log "Xbox components fully uninstalled and blocked" "OK"
 
