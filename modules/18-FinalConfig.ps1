@@ -89,7 +89,20 @@ $startupPaths = @(
 )
 # Whitelist: ONLY these survive - everything else gets killed
 $startupWhitelist = @(
-    "SecurityHealth"        # Windows Security (mandatory)
+    "SecurityHealth",       # Windows Security (mandatory)
+    "RtkAuduService",       # Realtek Audio
+    "RTHDVCPL",             # Realtek HD Audio Manager
+    "RtHDVCpl",             # Realtek HD Audio (alt)
+    "NvBackend",            # NVIDIA GeForce Experience
+    "NVDisplay",            # NVIDIA Display Driver
+    "NVIDIA Share",         # NVIDIA overlay
+    "AMD Radeon",           # AMD GPU
+    "StartCN",              # AMD Radeon Settings
+    "iTunesHelper",         # iTunes (if installed by user)
+    "WavesSvc",             # Waves Audio
+    "cAudioFilterAgent",    # Conexant Audio
+    "SynTPEnh",             # Synaptics Touchpad
+    "WindowsDefender"       # Defender alt entry
 )
 foreach ($regPath in $startupPaths) {
     $entries = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
@@ -180,8 +193,14 @@ foreach ($r32 in $run32Paths) {
                 $_.Name -notin @("PSPath", "PSParentPath", "PSChildName", "PSDrive", "PSProvider")
             }
             foreach ($prop in $props) {
-                Remove-ItemProperty -Path $r32 -Name $prop.Name -ErrorAction SilentlyContinue
-                Write-Log "Removed RunOnce entry: $($prop.Name)" "OK"
+                # Only remove known bloat — leave Windows/driver RunOnce entries alone
+                $isBloat = $prop.Name -match "(?i)(WextractCleanup|Uninstall|AdobeAAM|GoogleUpdate|CCleaner|Opera|Brave)"
+                if ($isBloat) {
+                    Remove-ItemProperty -Path $r32 -Name $prop.Name -ErrorAction SilentlyContinue
+                    Write-Log "Removed RunOnce entry: $($prop.Name)" "OK"
+                } else {
+                    Write-Log "Kept RunOnce entry: $($prop.Name)" "DEBUG"
+                }
             }
         }
     }
