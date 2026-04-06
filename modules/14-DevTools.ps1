@@ -315,9 +315,11 @@ if ($npmPath) {
             $psi.RedirectStandardOutput = $true
             $psi.RedirectStandardError = $true
             $proc = [System.Diagnostics.Process]::Start($psi)
-            $stdout = $proc.StandardOutput.ReadToEnd()
-            $stderr = $proc.StandardError.ReadToEnd()
+            $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
+            $stderrTask = $proc.StandardError.ReadToEndAsync()
             $proc.WaitForExit()
+            $stdout = $stdoutTask.GetAwaiter().GetResult()
+            $stderr = $stderrTask.GetAwaiter().GetResult()
             return @{ ExitCode = $proc.ExitCode; Output = $stdout }
         } else {
             $r = Invoke-Silent "cmd" "/c `"$npmExePath`" $Arguments" -TimeoutSeconds 300
@@ -561,7 +563,7 @@ autoMemoryReclaim=gradual
 sparseVhd=true
 "@
 Set-Content -Path $wslConfigPath -Value $wslConfig -Encoding UTF8
-Write-Log "WSL configured: 16GB RAM, 4 CPUs, 4GB swap, nested virt, auto memory reclaim" "OK"
+Write-Log "WSL configured: 32GB RAM, 26 CPUs, 4GB swap, nested virt, auto memory reclaim" "OK"
 
 # ============================================================================
 # Hacker / Security / Pentesting Tools
@@ -727,7 +729,7 @@ if (-not (Test-Path $sshDir)) {
 # Generate ED25519 SSH key if none exists
 $sshKey = Join-Path $sshDir "id_ed25519"
 if (-not (Test-Path $sshKey)) {
-    ssh-keygen -t ed25519 -C "$env:USERNAME@$env:COMPUTERNAME" -f $sshKey -N '""' 2>&1 | Out-Null
+    ssh-keygen -t ed25519 -C "$env:USERNAME@$env:COMPUTERNAME" -f $sshKey -N "" 2>&1 | Out-Null
     Write-Log "ED25519 SSH key generated at $sshKey" "OK"
 } else {
     Write-Log "SSH key already exists at $sshKey" "OK"
@@ -1029,7 +1031,7 @@ if (Test-Path $sdkmanager) {
         # Google GDK license
         "google-gdk-license"          = "`n33b6a2b64607f11b759f320ef9dff4ae5c47d97a"
         # mips Android DBTL license
-        "mips-android-sysimage-license" = "`ne9acab5b5fbb560a72cfaecber8acf4457f3ed00"
+        "mips-android-sysimage-license" = "`ne9acab5b5fbb560a72cfaecbe88acf4457f3ed00"
     }
 
     $licensesWritten = 0
