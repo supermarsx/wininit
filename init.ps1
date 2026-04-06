@@ -85,7 +85,7 @@ $ramGB = [math]::Round((Get-CimInstance Win32_ComputerSystem -ErrorAction Silent
 Write-Banner -Title "W I N I N I T" `
     -Subtitle "Windows Initialization & Customization Script" `
     -Info @(
-        "19 Modules | Full Automation | Zero Interaction",
+        "18 Modules | Full Automation | Zero Interaction",
         "User: $env:USERNAME@$env:COMPUTERNAME | RAM: ${ramGB}GB",
         "OS: $osInfo",
         "PS: $($Host.Name) v$($Host.Version) | VT: $($script:VTEnabled)",
