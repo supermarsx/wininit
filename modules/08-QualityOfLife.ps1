@@ -51,7 +51,7 @@ try {
     if (Get-Command Read-WTSettings -ErrorAction SilentlyContinue) {
         $wtConfig = Read-WTSettings
         if ($wtConfig) {
-            $wtConfig | Add-Member -NotePropertyName "defaultProfile" -NotePropertyValue "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}" -Force
+            $wtConfig | Add-Member -NotePropertyName "defaultProfile" -NotePropertyValue "{574e775e-4f2a-5b96-ac1e-a2962a402336}" -Force
             Write-WTSettings -Config $wtConfig | Out-Null
         } else {
             $wtConfig = Repair-WTSettings
@@ -64,15 +64,15 @@ try {
             $raw = Get-Content $wtSettingsPath -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
             $raw = $raw -replace '(?m)^\s*//.*$', '' -replace ',\s*([}\]])', '$1'
             $wtObj = $raw | ConvertFrom-Json -ErrorAction Stop
-            $wtObj | Add-Member -NotePropertyName "defaultProfile" -NotePropertyValue "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}" -Force
+            $wtObj | Add-Member -NotePropertyName "defaultProfile" -NotePropertyValue "{574e775e-4f2a-5b96-ac1e-a2962a402336}" -Force
             $wtObj | ConvertTo-Json -Depth 20 | Set-Content $wtSettingsPath -Encoding UTF8
         } else {
             $wtDefault = @{
-                defaultProfile = "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}"
+                defaultProfile = "{574e775e-4f2a-5b96-ac1e-a2962a402336}"
                 profiles = @{
                     defaults = @{}
                     list = @(
-                        @{ guid = "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}"; name = "PowerShell"; commandline = "powershell.exe -NoLogo"; hidden = $false }
+                        @{ guid = "{574e775e-4f2a-5b96-ac1e-a2962a402336}"; name = "PowerShell"; commandline = "powershell.exe -NoLogo"; hidden = $false }
                         @{ guid = "{574e775e-4f2a-5b96-ac1e-a2962a402336}"; name = "PowerShell 7"; commandline = "pwsh.exe -NoLogo"; source = "Windows.Terminal.PowershellCore"; hidden = $false }
                         @{ guid = "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}"; name = "Command Prompt"; commandline = "cmd.exe"; hidden = $false }
                     )
