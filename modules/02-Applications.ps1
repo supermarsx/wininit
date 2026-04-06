@@ -253,7 +253,7 @@ Stop-Process -Name "Docker Desktop" -Force -ErrorAction SilentlyContinue
 Stop-Process -Name "Docker*" -Force -ErrorAction SilentlyContinue
 Stop-Process -Name "com.docker*" -Force -ErrorAction SilentlyContinue
 Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Docker Desktop" -ErrorAction SilentlyContinue
-Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "com.docker.dektop" -ErrorAction SilentlyContinue
+Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "com.docker.desktop" -ErrorAction SilentlyContinue
 Install-App "PowerShell 7"          -WingetId "Microsoft.PowerShell"           -ChocoId "powershell-core"
 Install-App "CMake"                 -WingetId "Kitware.CMake"                  -ChocoId "cmake"          -ScoopId "cmake"
 Install-App "AutoIt"                -WingetId "AutoIt.AutoIt"                  -ChocoId "autoit"
