@@ -154,11 +154,14 @@ foreach ($browser in $browserPolicies) {
             Where-Object { $_.Name -match "^\d+$" } |
             ForEach-Object { $_.Value }
     }
-    $nextIndex = ($existing.PSObject.Properties |
-        Where-Object { $_.Name -match "^\d+$" } |
-        ForEach-Object { [int]$_.Name } |
-        Measure-Object -Maximum).Maximum
-    if (-not $nextIndex) { $nextIndex = 0 } else { $nextIndex++ }
+    $nextIndex = 0
+    if ($existing) {
+        $maxIdx = ($existing.PSObject.Properties |
+            Where-Object { $_.Name -match "^\d+$" } |
+            ForEach-Object { [int]$_.Name } |
+            Measure-Object -Maximum).Maximum
+        if ($maxIdx) { $nextIndex = $maxIdx + 1 }
+    }
 
     foreach ($ext in $chromeExtensions) {
         $entry = "$($ext.id);$updateUrl"
