@@ -289,6 +289,7 @@ if (-not $nodePath -or -not $npmPath) {
 }
 
 if ($nodePath) { Write-Log "node: $(node --version 2>$null)" "OK" }
+$useNodeDirect = $false
 if ($npmPath) {
     Write-Log "npm: $(npm --version 2>$null)" "OK"
 
@@ -1132,6 +1133,11 @@ if (Test-Path $sdkmanager) {
         }
     }
 
+    # Initialize SDK counters before any component installs
+    $sdkSkipped = 0
+    $sdkInstalled = 0
+    $sdkFailed = 0
+
     # usb_driver handled separately — it's optional (only for physical USB device debugging)
     # and has a 3-level directory structure that confuses the generic extract logic
     $usbDriverDir = Join-Path $androidSdkRoot "extras\google\usb_driver"
@@ -1175,9 +1181,6 @@ if (Test-Path $sdkmanager) {
     )
 
     $allPkgs = @($sdkDirectDownloads | ForEach-Object { $_.pkg }) + $sdkManagerOnly
-    $sdkSkipped = 0
-    $sdkInstalled = 0
-    $sdkFailed = 0
 
     # Count already installed
     foreach ($pkg in $allPkgs) {
@@ -1487,6 +1490,7 @@ if ($pythonExe) {
     if ($userScripts -and (Test-Path $userScripts -ErrorAction SilentlyContinue) -eq $false) {
         New-Item -ItemType Directory -Path $userScripts -Force -ErrorAction SilentlyContinue | Out-Null
     }
+    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
     if ($userScripts -and $machinePath -notmatch [regex]::Escape($userScripts)) {
         [System.Environment]::SetEnvironmentVariable("Path", "$machinePath;$userScripts", "Machine")
         $env:Path = "$env:Path;$userScripts"
@@ -1817,7 +1821,7 @@ if ($goExe) {
 
     # Enable Go modules by default and set useful env vars
     go env -w GOFLAGS="-mod=mod" >$null 2>&1
-    go env -w GONOSUMCHECK="off" >$null 2>&1
+    go env -u GONOSUMCHECK >$null 2>&1
     Write-Log "Go env configured" "OK"
 } else {
     Write-Log "Go not found - Go tools skipped" "WARN"
