@@ -231,8 +231,7 @@ if (-not (Test-Path $FeedsPath)) { New-Item -Path $FeedsPath -Force | Out-Null }
 Set-ItemProperty -Path $FeedsPath -Name "EnableFeeds" -Value 0 -Type DWord
 # Hide Chat icon (Win 11)
 Set-ItemProperty -Path $TaskbarPath -Name "TaskbarMn" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-# Left-align taskbar (Win 11: 0 = left, 1 = center)
-# Centered taskbar icons (Win 11: 0 = left, 1 = center)
+# Center taskbar icons (Win 11: 0 = left, 1 = center)
 Set-ItemProperty -Path $TaskbarPath -Name "TaskbarAl" -Value 1 -Type DWord -ErrorAction SilentlyContinue
 # Hide Copilot button
 Set-ItemProperty -Path $TaskbarPath -Name "ShowCopilotButton" -Value 0 -Type DWord -ErrorAction SilentlyContinue
@@ -400,11 +399,11 @@ Write-Log "Disabling Windows Search service and indexing..."
 Stop-Service -Name "WSearch" -Force -ErrorAction SilentlyContinue
 Set-Service  -Name "WSearch" -StartupType Disabled -ErrorAction SilentlyContinue
 # Disable indexing on all drives via fsutil (most reliable, works on all volumes)
-$drives = Get-CimInstance -ClassName Win32_LogicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.DriveType -in @(2, 3) }
+$drives = Get-CimInstance -ClassName Win32_LogicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.DriveType -eq 3 }
 foreach ($drv in $drives) {
     $letter = $drv.DeviceID  # e.g. "C:"
     try {
-        # fsutil behavior set disableindexing 1 per-volume
+        # Disable 8.3 short filename generation (improves NTFS performance)
         fsutil behavior set disable8dot3 "$letter" 1 >$null 2>&1
         # Disable content indexing attribute on drive root
         $root = "$letter\"
@@ -779,7 +778,6 @@ $telemetryHosts = @(
     "watson.ppe.telemetry.microsoft.com",
     "telemetry.appex.bing.net",
     "telemetry.urs.microsoft.com",
-    "telemetry.appex.bing.net",
     "settings-sandbox.data.microsoft.com",
     "vortex-sandbox.data.microsoft.com",
     "survey.watson.microsoft.com",
