@@ -292,11 +292,15 @@ if ($execPolicy -in @("Unrestricted", "Bypass", "RemoteSigned")) {
 $pendingReboot = $false
 $rebootKeys = @(
     "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending",
-    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired",
-    "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\PendingFileRenameOperations"
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
 )
 foreach ($rk in $rebootKeys) {
     if (Test-Path $rk) { $pendingReboot = $true; break }
+}
+# PendingFileRenameOperations is a registry value, not a key — Test-Path doesn't work on values
+if (-not $pendingReboot) {
+    $pfrOps = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name "PendingFileRenameOperations" -ErrorAction SilentlyContinue
+    if ($pfrOps) { $pendingReboot = $true }
 }
 if ($pendingReboot) {
     Write-Log "Pending reboot detected - some operations may fail or require re-run" "WARN"

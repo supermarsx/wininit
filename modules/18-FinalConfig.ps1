@@ -327,7 +327,7 @@ if (Test-Path $installerCache) {
 }
 
 # --- Delivery Optimization cache ---
-Delete-DeliveryOptimizationCache -Force -ErrorAction SilentlyContinue
+Clear-DeliveryOptimizationCache -Force -ErrorAction SilentlyContinue
 Write-Log "Delivery Optimization cache cleared" "OK"
 
 # --- Windows Error Reporting dumps ---
