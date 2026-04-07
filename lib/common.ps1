@@ -401,9 +401,11 @@ function Invoke-ExternalWithSpinner {
         $psi.CreateNoWindow = $true
 
         $proc = [System.Diagnostics.Process]::Start($psi)
-        $stdout = $proc.StandardOutput.ReadToEnd()
-        $stderr = $proc.StandardError.ReadToEnd()
+        $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
+        $stderrTask = $proc.StandardError.ReadToEndAsync()
         $proc.WaitForExit()
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
 
         $final = if ($SuccessMessage) { $SuccessMessage } else { $Message }
         if ($proc.ExitCode -eq 0) {
@@ -1034,6 +1036,9 @@ function Invoke-SilentWithProgress {
 
         $proc = [System.Diagnostics.Process]::Start($psi)
 
+        # Start async stderr read immediately to prevent buffer deadlock
+        $stderrTask = $proc.StandardError.ReadToEndAsync()
+
         # Read stdout line by line and update spinner
         $allOutput = ""
         while (-not $proc.StandardOutput.EndOfStream) {
@@ -1051,7 +1056,7 @@ function Invoke-SilentWithProgress {
                 $script:SpinnerSync.Message = $msg
             }
         }
-        $errOutput = $proc.StandardError.ReadToEnd()
+        $errOutput = $stderrTask.GetAwaiter().GetResult()
         $proc.WaitForExit()
 
         return @{ ExitCode = $proc.ExitCode; Output = "$allOutput $errOutput" }

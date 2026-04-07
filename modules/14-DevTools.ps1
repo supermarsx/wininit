@@ -1257,8 +1257,8 @@ if (Test-Path $sdkmanager) {
             $sdkMgrPsi.Arguments = "/c `"type `"$yesFile`" | `"$sdkmanager`" --sdk_root=`"$androidSdkRoot`" $pkgArgs`""
             $sdkMgrPsi.UseShellExecute = $false
             $sdkMgrPsi.CreateNoWindow = $true
-            $sdkMgrPsi.RedirectStandardOutput = $true
-            $sdkMgrPsi.RedirectStandardError = $true
+            $sdkMgrPsi.RedirectStandardOutput = $false
+            $sdkMgrPsi.RedirectStandardError = $false
             $sdkMgrProc = [System.Diagnostics.Process]::Start($sdkMgrPsi)
         }
 
@@ -1348,7 +1348,11 @@ if (Test-Path $sdkmanager) {
                 $retryPsi.RedirectStandardOutput = $true
                 $retryPsi.RedirectStandardError = $true
                 $retryProc = [System.Diagnostics.Process]::Start($retryPsi)
+                $retryOut = $retryProc.StandardOutput.ReadToEndAsync()
+                $retryErr = $retryProc.StandardError.ReadToEndAsync()
                 $retryProc.WaitForExit()
+                $null = $retryOut.GetAwaiter().GetResult()
+                $null = $retryErr.GetAwaiter().GetResult()
                 if (Test-Path $pkgDir) {
                     Write-Log "SDK: $pkgName installed (sdkmanager fallback)" "OK"
                     $sdkInstalled++
@@ -1383,7 +1387,11 @@ if (Test-Path $sdkmanager) {
                 $retryPsi.RedirectStandardOutput = $true
                 $retryPsi.RedirectStandardError = $true
                 $retryProc = [System.Diagnostics.Process]::Start($retryPsi)
+                $retryOut = $retryProc.StandardOutput.ReadToEndAsync()
+                $retryErr = $retryProc.StandardError.ReadToEndAsync()
                 $retryProc.WaitForExit()
+                $null = $retryOut.GetAwaiter().GetResult()
+                $null = $retryErr.GetAwaiter().GetResult()
 
                 if (Test-Path $pkgDir) {
                     Write-Log "SDK: $pkgName installed (sdkmanager retry)" "OK"
