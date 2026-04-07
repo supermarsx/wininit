@@ -15,7 +15,7 @@ Write-Log "NumLock enabled at boot" "OK"
 Write-Log "Disabling Sticky Keys, Filter Keys, and Toggle Keys..."
 # Sticky Keys - disable the shortcut and the feature
 $StickyPath = "HKCU:\Control Panel\Accessibility\StickyKeys"
-Set-ItemProperty -Path $StickyPath -Name "Flags" -Value "506" -Type String   # 506 = all off
+Set-ItemProperty -Path $StickyPath -Name "Flags" -Value "58" -Type String    # 58 = all off including 5x-Shift hotkey
 # Filter Keys
 $FilterPath = "HKCU:\Control Panel\Accessibility\Keyboard Response"
 Set-ItemProperty -Path $FilterPath -Name "Flags" -Value "122" -Type String   # 122 = all off
@@ -72,7 +72,7 @@ try {
                 profiles = @{
                     defaults = @{}
                     list = @(
-                        @{ guid = "{574e775e-4f2a-5b96-ac1e-a2962a402336}"; name = "PowerShell"; commandline = "powershell.exe -NoLogo"; hidden = $false }
+                        @{ guid = "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}"; name = "PowerShell"; commandline = "powershell.exe -NoLogo"; hidden = $false }
                         @{ guid = "{574e775e-4f2a-5b96-ac1e-a2962a402336}"; name = "PowerShell 7"; commandline = "pwsh.exe -NoLogo"; source = "Windows.Terminal.PowershellCore"; hidden = $false }
                         @{ guid = "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}"; name = "Command Prompt"; commandline = "cmd.exe"; hidden = $false }
                     )
