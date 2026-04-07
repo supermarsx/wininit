@@ -721,7 +721,7 @@ if (-not (Test-Path $kpxcConfig)) {
     # Patch existing config
     $existing = Get-Content $kpxcConfig -Raw
     if ($existing -notmatch "ApplicationTheme") {
-        Add-Content -Path $kpxcConfig -Value "`nApplicationTheme=dark"
+        Add-Content -Path $kpxcConfig -Value "`n[GUI]`nApplicationTheme=dark"
     }
     Write-Log "KeePassXC dark theme patched" "OK"
 }
