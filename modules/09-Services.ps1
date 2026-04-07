@@ -126,7 +126,6 @@ Write-Log "Windows Ink optional feature disabled" "OK"
 
 # Remove ink-related apps
 $inkApps = @(
-    "Microsoft.WindowsNotepad",
     "Microsoft.ScreenSketch",
     "Microsoft.Whiteboard",
     "Microsoft.SketchPad",
