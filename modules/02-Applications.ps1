@@ -258,6 +258,87 @@ Install-App "PowerShell 7"          -WingetId "Microsoft.PowerShell"           -
 Install-App "CMake"                 -WingetId "Kitware.CMake"                  -ChocoId "cmake"          -ScoopId "cmake"
 Install-App "AutoIt"                -WingetId "AutoIt.AutoIt"                  -ChocoId "autoit"
 
+# Configure SciTE4AutoIt dark mode
+$sciteDir = "${env:ProgramFiles(x86)}\AutoIt3\SciTE"
+if (Test-Path "$sciteDir\SciTE.exe") {
+    $sciteUserDir = "$env:LOCALAPPDATA\AutoIt v3\SciTE"
+    New-Item -Path $sciteUserDir -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null
+
+    $userProps = Join-Path $sciteUserDir "SciTEUser.properties"
+    # Build dark theme properties (VS Code-inspired dark palette)
+    $darkProps = @"
+# === WinInit Dark Theme for SciTE4AutoIt ===
+
+# ── Global default style (applies to all languages) ──
+style.*.32=back:#1E1E1E,fore:#D4D4D4,font:Consolas,size:10
+# Line-number margin
+style.*.33=back:#252526,fore:#858585,size:8
+# Brace highlight / mismatch
+style.*.34=fore:#DCDCAA,bold,back:#1E1E1E
+style.*.35=fore:#F44747,bold,back:#1E1E1E
+
+# ── Editor chrome ──
+caret.fore=#AEAFAD
+caret.line.back=#2A2D2E
+selection.back=#264F78
+selection.alpha=256
+edge.colour=#3E3E3E
+fold.margin.colour=#1E1E1E
+fold.margin.highlight.colour=#1E1E1E
+calltip.back=#252526
+
+# ── AutoIt syntax (style.au3.*) ──
+# 0=default, 1=comment, 2=comment-block, 3=number, 4=function,
+# 5=keyword, 6=macro, 7=string, 8=operator, 9=variable,
+# 10=sent, 11=pre-processor, 12=special, 13=expand, 15=comobj
+style.au3.0=fore:#D4D4D4,back:#1E1E1E
+style.au3.1=fore:#6A9955,back:#1E1E1E,italics
+style.au3.2=fore:#6A9955,back:#1E1E1E,italics
+style.au3.3=fore:#B5CEA8,back:#1E1E1E
+style.au3.4=fore:#DCDCAA,back:#1E1E1E
+style.au3.5=fore:#569CD6,back:#1E1E1E,bold
+style.au3.6=fore:#C586C0,back:#1E1E1E
+style.au3.7=fore:#CE9178,back:#1E1E1E
+style.au3.8=fore:#D4D4D4,back:#1E1E1E
+style.au3.9=fore:#9CDCFE,back:#1E1E1E
+style.au3.10=fore:#4EC9B0,back:#1E1E1E
+style.au3.11=fore:#C586C0,back:#1E1E1E
+style.au3.12=fore:#DCDCAA,back:#1E1E1E,bold
+style.au3.13=fore:#9CDCFE,back:#1E1E1E
+style.au3.15=fore:#4EC9B0,back:#1E1E1E
+
+# ── Output pane ──
+style.errorlist.32=back:#1E1E1E,fore:#D4D4D4
+style.errorlist.0=fore:#D4D4D4,back:#1E1E1E
+style.errorlist.2=fore:#F44747,back:#1E1E1E
+
+# ── Properties files ──
+style.props.0=fore:#D4D4D4,back:#1E1E1E
+style.props.1=fore:#6A9955,back:#1E1E1E
+style.props.2=fore:#569CD6,back:#1E1E1E
+style.props.3=fore:#CE9178,back:#1E1E1E
+style.props.5=fore:#9CDCFE,back:#1E1E1E
+
+# ── Misc settings ──
+output.magnification=-1
+highlight.current.word=1
+highlight.current.word.colour=#3A3D41
+"@
+
+    # Preserve any existing user customisations by appending if the file already has content
+    if ((Test-Path $userProps) -and (Get-Item $userProps).Length -gt 0) {
+        $existing = Get-Content $userProps -Raw
+        if ($existing -notmatch "WinInit Dark Theme") {
+            Add-Content -Path $userProps -Value "`n$darkProps" -Encoding UTF8
+        }
+    } else {
+        Set-Content -Path $userProps -Value $darkProps -Encoding UTF8
+    }
+    Write-Log "SciTE4AutoIt dark mode configured" "OK"
+} else {
+    Write-Log "SciTE4AutoIt not found – skipping dark mode config" "WARN"
+}
+
 # ---- Python ----
 Install-App "Python 2.7"            -WingetId "Python.Python.2"                -ChocoId "python2"
 Install-App "Python 3"              -WingetId "Python.Python.3.12"             -ChocoId "python3"        -ScoopId "python"
@@ -342,6 +423,50 @@ Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" 
 
 # ---- Editors ----
 Install-App "Notepad++"             -WingetId "Notepad++.Notepad++"            -ChocoId "notepadplusplus"
+
+# Configure Notepad++ dark mode
+$nppDir = "$env:ProgramFiles\Notepad++"
+$nppAppData = "$env:APPDATA\Notepad++"
+if (Test-Path "$nppDir\notepad++.exe") {
+    New-Item -Path $nppAppData -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null
+
+    # Copy the model config as a starting point if no config exists yet
+    $nppConfig = Join-Path $nppAppData "config.xml"
+    $modelConfig = Join-Path $nppDir "config.model.xml"
+    if (-not (Test-Path $nppConfig) -and (Test-Path $modelConfig)) {
+        Copy-Item $modelConfig $nppConfig -Force
+    }
+
+    if (Test-Path $nppConfig) {
+        [xml]$xml = Get-Content $nppConfig -Raw
+        $ns = $xml.NotepadPlus
+
+        # Enable DarkMode
+        $darkNode = $ns.GUIConfigs.GUIConfig | Where-Object { $_.name -eq "DarkMode" }
+        if ($darkNode) {
+            $darkNode.SetAttribute("enable", "yes")
+            $darkNode.SetAttribute("darkThemeName", "DarkModeDefault")
+        } else {
+            # Create DarkMode node if missing
+            $newNode = $xml.CreateElement("GUIConfig")
+            $newNode.SetAttribute("name", "DarkMode")
+            $newNode.SetAttribute("enable", "yes")
+            $newNode.SetAttribute("darkThemeName", "DarkModeDefault")
+            $ns.GUIConfigs.AppendChild($newNode) | Out-Null
+        }
+
+        # Set the dark theme styler
+        $themeNode = $ns.GUIConfigs.GUIConfig | Where-Object { $_.name -eq "stylerTheme" }
+        if ($themeNode) {
+            $themeNode.SetAttribute("path", "$nppDir\themes\DarkModeDefault.xml")
+        }
+
+        $xml.Save($nppConfig)
+        Write-Log "Notepad++ dark mode enabled" "OK"
+    }
+} else {
+    Write-Log "Notepad++ not found – skipping dark mode config" "WARN"
+}
 
 # ---- Bootable USB ----
 Install-App "Rufus"                 -WingetId "Rufus.Rufus"                    -ChocoId "rufus"
