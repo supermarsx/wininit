@@ -507,7 +507,16 @@ $cliTools = @(
     @("CLI", "adb"),
     @("CLI", "nmap"),
     @("CLI", "lazygit"),
-    @("CLI", "delta")
+    @("CLI", "delta"),
+    @("CLI", "tokei"),
+    @("CLI", "eza"),
+    @("CLI", "zoxide"),
+    @("CLI", "dust"),
+    @("CLI", "sd"),
+    @("CLI", "glow"),
+    @("CLI", "hyperfine"),
+    @("CLI", "btm"),
+    @("CLI", "procs")
 )
 foreach ($tool in $cliTools) {
     Verify-Item $tool[0] $tool[1] { $null -ne (Get-Command $tool[1] -ErrorAction SilentlyContinue) }
