@@ -15,6 +15,14 @@ $script:VTEnabled   = $false
 $script:SpinnerJob  = $null
 $script:SpinnerFrames = @('|', '/', '-', '\')
 
+# --- Dry-Run Mode ---
+$script:DryRunMode  = $false
+$script:DryRunStats = @{ Apps = 0; Registry = 0; Services = 0; Features = 0; Downloads = 0 }
+
+# --- Config (populated by init.ps1 after loading config.toml / profile) ---
+$script:Config      = @{}
+$script:AppsSkip    = @()
+
 # ============================================================================
 # ANSI / Virtual Terminal Color Support
 # ============================================================================
@@ -964,6 +972,11 @@ function Invoke-Silent {
         [string]$Args,
         [int]$TimeoutSeconds = 1600  # ~26 min default timeout per command
     )
+    # --- Dry-run: log the command but don't execute ---
+    if ($script:DryRunMode) {
+        Write-Log "[DRY RUN] Would execute: $Exe $Args" "INFO"
+        return @{ ExitCode = 0; Output = "[DRY RUN] Skipped: $Exe $Args" }
+    }
     try {
         # Resolve full path for the executable (handles UWP aliases like winget)
         $resolvedExe = $Exe
@@ -1084,6 +1097,31 @@ function Install-App {
         [string]$ScoopId
     )
 
+    # --- Dry-run: log what would be installed but skip execution ---
+    if ($script:DryRunMode) {
+        $id = if ($WingetId) { $WingetId } elseif ($ChocoId) { $ChocoId } elseif ($ScoopId) { $ScoopId } else { "unknown" }
+        Write-Log "[DRY RUN] Would install: $Name ($id)" "INFO"
+        $script:DryRunStats.Apps++
+        if ($script:SpinnerSync.Active -and $script:SpinnerSync.Total -gt 0) {
+            $script:SpinnerSync.Progress++
+        }
+        return
+    }
+
+    # --- Skip if app is in the skip list ---
+    if ($script:AppsSkip.Count -gt 0) {
+        $skipIds = @($WingetId, $ChocoId, $ScoopId) | Where-Object { $_ }
+        foreach ($sid in $skipIds) {
+            if ($script:AppsSkip -contains $sid) {
+                Write-Log "Skipping $Name ($sid) - in apps skip list" "INFO"
+                if ($script:SpinnerSync.Active -and $script:SpinnerSync.Total -gt 0) {
+                    $script:SpinnerSync.Progress++
+                }
+                return
+            }
+        }
+    }
+
     # If a section spinner is already running (with progress), update it
     # Otherwise start our own
     $ownSpinner = -not $script:SpinnerSync.Active
@@ -1193,6 +1231,12 @@ function Install-PortableBin {
         [string]$ArchiveType = "zip",
         [string]$SubPath = ""
     )
+    # --- Dry-run: log the download but don't fetch ---
+    if ($script:DryRunMode) {
+        Write-Log "[DRY RUN] Would download portable binary: $Name ($ExeName) -> C:\bin" "INFO"
+        $script:DryRunStats.Downloads++
+        return
+    }
     $binDir = "C:\bin"
     $destExe = Join-Path $binDir $ExeName
     if (Test-Path $destExe) {
@@ -1268,6 +1312,12 @@ function Install-PortableApp {
         [string]$Url,
         [string]$ArchiveType = "zip"
     )
+    # --- Dry-run: log the download but don't fetch ---
+    if ($script:DryRunMode) {
+        Write-Log "[DRY RUN] Would download portable app: $Name -> C:\apps" "INFO"
+        $script:DryRunStats.Downloads++
+        return
+    }
     $appsDir = "C:\apps"
     $appFolder = Join-Path $appsDir $Name
     if (Test-Path $appFolder) {
@@ -1340,6 +1390,12 @@ function Set-RegistrySafe {
         $Value,
         [string]$Type = "DWord"
     )
+    # --- Dry-run: log the change but don't write ---
+    if ($script:DryRunMode) {
+        Write-Log "[DRY RUN] Would set registry: $Path\$Name = $Value ($Type)" "INFO"
+        $script:DryRunStats.Registry++
+        return
+    }
     try {
         if (-not (Test-Path $Path)) { New-Item -Path $Path -Force | Out-Null }
         Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type -ErrorAction Stop
@@ -1356,6 +1412,12 @@ function Set-RegistrySafe {
 function Disable-ServiceSafe {
     param([string]$Name, [string]$DisplayName = "")
     $label = if ($DisplayName) { "$DisplayName ($Name)" } else { $Name }
+    # --- Dry-run: log the change but don't stop/disable ---
+    if ($script:DryRunMode) {
+        Write-Log "[DRY RUN] Would disable service: $label" "INFO"
+        $script:DryRunStats.Services++
+        return
+    }
     try {
         $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
         if ($svc) {
@@ -1388,6 +1450,12 @@ function Invoke-DownloadSafe {
         [int]$MaxRetries = 3,
         [int]$TimeoutSec = 120
     )
+    # --- Dry-run: log the download but don't fetch ---
+    if ($script:DryRunMode) {
+        Write-Log "[DRY RUN] Would download: $(Split-Path $Url -Leaf) -> $OutFile" "INFO"
+        $script:DryRunStats.Downloads++
+        return $true
+    }
     Write-Log "Downloading $(Split-Path $Url -Leaf) -> $OutFile" "DEBUG"
     for ($i = 1; $i -le $MaxRetries; $i++) {
         try {
@@ -1475,6 +1543,12 @@ function Add-ToSystemPath {
 
 function Remove-AppxSafe {
     param([string]$Name)
+    # --- Dry-run: log the removal but don't execute ---
+    if ($script:DryRunMode) {
+        Write-Log "[DRY RUN] Would remove AppxPackage: $Name" "INFO"
+        $script:DryRunStats.Features++
+        return
+    }
     Write-Log "Removing AppxPackage: $Name" "DEBUG"
     try {
         Get-AppxPackage -Name $Name -ErrorAction SilentlyContinue | Remove-AppxPackage -ErrorAction SilentlyContinue
@@ -1497,6 +1571,12 @@ function Add-HostsBlock {
         [string]$MarkerName,
         [string[]]$Hostnames
     )
+    # --- Dry-run: log the block but don't modify hosts ---
+    if ($script:DryRunMode) {
+        Write-Log "[DRY RUN] Would block $($Hostnames.Count) hosts in $MarkerName" "INFO"
+        $script:DryRunStats.Features++
+        return
+    }
     $hostsFile = "$env:WINDIR\System32\drivers\etc\hosts"
     $hostsContent = Get-Content $hostsFile -Raw -ErrorAction SilentlyContinue
     $marker = "# --- WinInit $MarkerName ---"
@@ -1546,5 +1626,246 @@ function Set-MachineEnvVar {
 function Get-UserPath {
     param([string]$SubPath)
     return Join-Path $env:USERPROFILE $SubPath
+}
+
+# ============================================================================
+# Dry-Run Summary
+# ============================================================================
+
+function Write-DryRunSummary {
+    # Print a summary of what WOULD have happened during the dry run
+    if (-not $script:DryRunMode) { return }
+
+    $stats = $script:DryRunStats
+    $lines = @(
+        "DRY RUN COMPLETE - No changes were made to the system",
+        "",
+        "Would install:       $($stats.Apps) apps",
+        "Would modify:        $($stats.Registry) registry keys",
+        "Would disable:       $($stats.Services) services",
+        "Would remove/change: $($stats.Features) features/packages",
+        "Would download:      $($stats.Downloads) files"
+    )
+    Write-SummaryBox "Dry Run Results" $lines
+    Write-Log "DRY RUN COMPLETE: Would install $($stats.Apps) apps, modify $($stats.Registry) registry keys, disable $($stats.Services) services" "INFO"
+}
+
+# ============================================================================
+# TOML Config Parser (lightweight, handles WinInit config.toml format)
+# ============================================================================
+
+function Read-TomlConfig {
+    param([string]$Path)
+
+    if (-not (Test-Path $Path)) {
+        Write-Log "Config file not found: $Path" "WARN"
+        return @{}
+    }
+
+    $config = @{}
+    $currentSection = $null
+
+    $lines = Get-Content $Path -ErrorAction Stop
+
+    foreach ($line in $lines) {
+        # Strip inline comments (# not inside quotes)
+        # Simple approach: if line has # outside of a quoted string, strip it
+        $stripped = $line
+        $inQuote = $false
+        $quoteChar = $null
+        for ($i = 0; $i -lt $stripped.Length; $i++) {
+            $ch = $stripped[$i]
+            if ($inQuote) {
+                if ($ch -eq $quoteChar) { $inQuote = $false }
+            } else {
+                if ($ch -eq '"' -or $ch -eq "'") {
+                    $inQuote = $true
+                    $quoteChar = $ch
+                } elseif ($ch -eq '#') {
+                    $stripped = $stripped.Substring(0, $i)
+                    break
+                }
+            }
+        }
+        $stripped = $stripped.Trim()
+
+        # Skip empty lines
+        if ([string]::IsNullOrWhiteSpace($stripped)) { continue }
+
+        # Section header: [section]
+        if ($stripped -match '^\[([^\]]+)\]$') {
+            $currentSection = $Matches[1].Trim()
+            if (-not $config.ContainsKey($currentSection)) {
+                $config[$currentSection] = @{}
+            }
+            continue
+        }
+
+        # Key = Value pair
+        if ($stripped -match '^("?[^"=]+"?)\s*=\s*(.+)$') {
+            $rawKey = $Matches[1].Trim()
+            $rawVal = $Matches[2].Trim()
+
+            # Strip quotes from key
+            $key = $rawKey -replace '^"(.*)"$', '$1'
+            $key = $key -replace "^'(.*)'$", '$1'
+
+            # Parse value
+            $value = ConvertFrom-TomlValue $rawVal
+
+            if ($currentSection) {
+                $config[$currentSection][$key] = $value
+            } else {
+                $config[$key] = $value
+            }
+        }
+    }
+
+    return $config
+}
+
+function ConvertFrom-TomlValue {
+    param([string]$Raw)
+
+    $val = $Raw.Trim()
+
+    # Boolean
+    if ($val -eq 'true') { return $true }
+    if ($val -eq 'false') { return $false }
+
+    # Integer
+    if ($val -match '^-?\d+$') { return [int]$val }
+
+    # Float
+    if ($val -match '^-?\d+\.\d+$') { return [double]$val }
+
+    # Quoted string (double)
+    if ($val -match '^"(.*)"$') { return $Matches[1] }
+
+    # Quoted string (single)
+    if ($val -match "^'(.*)'$") { return $Matches[1] }
+
+    # Array: [val1, val2, ...]
+    if ($val -match '^\[') {
+        # Handle empty array (use comma operator to prevent PowerShell unrolling)
+        if ($val -match '^\[\s*\]$') { return ,@() }
+
+        # Strip outer brackets
+        $inner = $val.Substring(1, $val.Length - 2).Trim()
+
+        # Split by commas, respecting quotes
+        $items = @()
+        $current = ""
+        $inQ = $false
+        $qc = $null
+        for ($i = 0; $i -lt $inner.Length; $i++) {
+            $ch = $inner[$i]
+            if ($inQ) {
+                $current += $ch
+                if ($ch -eq $qc) { $inQ = $false }
+            } elseif ($ch -eq '"' -or $ch -eq "'") {
+                $inQ = $true
+                $qc = $ch
+                $current += $ch
+            } elseif ($ch -eq ',') {
+                if ($current.Trim()) { $items += (ConvertFrom-TomlValue $current.Trim()) }
+                $current = ""
+            } else {
+                $current += $ch
+            }
+        }
+        if ($current.Trim()) { $items += (ConvertFrom-TomlValue $current.Trim()) }
+        return @($items)
+    }
+
+    # Unquoted string (fallback)
+    return $val
+}
+
+# ============================================================================
+# Profile Loader (reads JSON profile files from profiles/ directory)
+# ============================================================================
+
+function Read-ProfileConfig {
+    param(
+        [string]$ProfileName,
+        [string]$ProfilesDir
+    )
+
+    $profilePath = Join-Path $ProfilesDir "$ProfileName.json"
+    if (-not (Test-Path $profilePath)) {
+        Write-Log "Profile not found: $profilePath" "ERROR"
+        Write-Log "Available profiles: developer, security, minimal, creative, office, full" "INFO"
+        return $null
+    }
+
+    try {
+        $json = Get-Content $profilePath -Raw | ConvertFrom-Json
+        Write-Log "Loaded profile: $($json.name) - $($json.description)" "INFO"
+        return $json
+    } catch {
+        Write-Log "Failed to parse profile $profilePath : $_" "ERROR"
+        return $null
+    }
+}
+
+# ============================================================================
+# Help Text
+# ============================================================================
+
+function Show-WinInitHelp {
+    $helpText = @"
+
+  WinInit - Windows Initialization & Customization Script
+  ========================================================
+
+  USAGE:
+    .\init.ps1 [OPTIONS]
+
+  OPTIONS:
+    -ConfigFile <path>    Path to a custom TOML config file
+                          (default: config.toml in script directory)
+
+    -Profile <name>       Apply a preset profile. Overrides config.toml profile.
+                          Profiles: developer, security, minimal, creative, office, full
+
+    -SkipModules <list>   Comma-separated module numbers/names to skip
+                          Example: -SkipModules "04","14","16"
+
+    -OnlyModules <list>   Run ONLY these modules (skip all others)
+                          Example: -OnlyModules "01","02","06","07"
+
+    -DryRun               Simulate execution without making changes.
+                          Shows what WOULD be installed, modified, or removed.
+
+    -Update               Quick update mode: just runs winget upgrade --all
+                          Skips all modules.
+
+    -Help                 Show this help message and exit.
+
+  PROFILES:
+    developer    Full dev environment with all toolchains (default)
+    security     Pentesting/security focus, maximum hardening
+    minimal      Package managers + debloat + privacy only
+    creative     Design/media focus: Blender, Krita, OBS
+    office       Productivity: browsers, office tools, essentials
+    full         Everything enabled, all modules and apps
+
+  CONFIG FILE:
+    config.toml in the script directory controls module selection,
+    privacy level, app skip lists, and update scheduling.
+    CLI flags override config file values.
+
+  EXAMPLES:
+    .\init.ps1                              # Run with config.toml defaults
+    .\init.ps1 -Profile minimal             # Minimal setup
+    .\init.ps1 -DryRun                      # Preview what would happen
+    .\init.ps1 -SkipModules "04","14"       # Skip OneDrive removal & DevTools
+    .\init.ps1 -OnlyModules "01","02","06"  # Only package managers, apps, debloat
+    .\init.ps1 -Update                      # Just update installed packages
+    .\init.ps1 -Profile security -DryRun    # Preview security profile
+
+"@
+    Write-Host $helpText
 }
 

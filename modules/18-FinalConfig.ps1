@@ -416,6 +416,33 @@ try {
 }
 
 # ============================================================================
+# Weekly Update Scheduled Task
+# ============================================================================
+Write-Log "Creating weekly update scheduled task..."
+$updateScript = Join-Path $PSScriptRoot "..\update.ps1"
+if (Test-Path $updateScript) {
+    $updateScriptFull = (Resolve-Path $updateScript).Path
+    try {
+        $action = New-ScheduledTaskAction -Execute "powershell.exe" `
+            -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$updateScriptFull`" -Silent"
+        $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At "4:00AM"
+        $settings = New-ScheduledTaskSettingsSet `
+            -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+            -StartWhenAvailable -RunOnlyIfNetworkAvailable
+        $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+
+        Register-ScheduledTask -TaskName "WinInit-WeeklyUpdate" `
+            -Action $action -Trigger $trigger -Settings $settings `
+            -Principal $principal -Force -ErrorAction Stop | Out-Null
+        Write-Log "Weekly update task created (Mondays 4:00 AM)" "OK"
+    } catch {
+        Write-Log "Failed to create scheduled task: $_" "WARN"
+    }
+} else {
+    Write-Log "update.ps1 not found at $updateScript - skipping scheduled task" "WARN"
+}
+
+# ============================================================================
 # Post-Install Verification
 # ============================================================================
 Write-Log "Running post-install verification..." "STEP"

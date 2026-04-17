@@ -1,1 +1,4 @@
 wininit.log
+wininit-undo.log
+checkpoint.json
+rollback.json

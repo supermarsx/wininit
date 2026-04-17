@@ -1,0 +1,26 @@
+{
+    "name": "creative",
+    "description": "Design and media production with Blender, Krita, OBS, and creative apps",
+    "modules": {
+        "01-PackageManagers": true,
+        "02-Applications": true,
+        "03-DesktopEnvironment": true,
+        "04-OneDriveRemoval": true,
+        "05-Performance": true,
+        "06-Debloat": true,
+        "07-Privacy": true,
+        "08-QualityOfLife": true,
+        "09-Services": true,
+        "10-NetworkPerformance": true,
+        "11-VisualUX": true,
+        "12-SecurityHardening": false,
+        "13-BrowserExtensions": true,
+        "14-DevTools": false,
+        "15-PortableTools": false,
+        "16-UnixEnvironment": false,
+        "17-VSCodeSetup": false,
+        "18-FinalConfig": true
+    },
+    "apps_skip": [],
+    "privacy_level": "standard"
+}

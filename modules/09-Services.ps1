@@ -84,7 +84,15 @@ $junkServices = @(
     @{ name = "XboxGipSvc";     desc = "Xbox Accessory Management" },
     @{ name = "XblAuthManager"; desc = "Xbox Live Auth Manager" },
     @{ name = "XblGameSave";    desc = "Xbox Live Game Save" },
-    @{ name = "XboxNetApiSvc";  desc = "Xbox Live Networking" }
+    @{ name = "XboxNetApiSvc";  desc = "Xbox Live Networking" },
+    @{ name = "DiagTrack";      desc = "Connected User Experiences and Telemetry" },
+    @{ name = "dmwappushservice"; desc = "WAP Push Message Routing" },
+    @{ name = "WerSvc";         desc = "Windows Error Reporting" },
+    @{ name = "SysMain";        desc = "Superfetch/SysMain" },
+    @{ name = "diagnosticshub.standardcollector.service"; desc = "Diagnostics Hub Standard Collector" },
+    @{ name = "DPS";            desc = "Diagnostic Policy Service" },
+    @{ name = "WdiServiceHost"; desc = "Diagnostic Service Host" },
+    @{ name = "WdiSystemHost";  desc = "Diagnostic System Host" }
 )
 
 foreach ($svc in $junkServices) {

@@ -1,0 +1,26 @@
+{
+    "name": "minimal",
+    "description": "Lightweight setup: package managers, debloat, and privacy only",
+    "modules": {
+        "01-PackageManagers": true,
+        "02-Applications": false,
+        "03-DesktopEnvironment": false,
+        "04-OneDriveRemoval": true,
+        "05-Performance": true,
+        "06-Debloat": true,
+        "07-Privacy": true,
+        "08-QualityOfLife": false,
+        "09-Services": false,
+        "10-NetworkPerformance": false,
+        "11-VisualUX": false,
+        "12-SecurityHardening": false,
+        "13-BrowserExtensions": false,
+        "14-DevTools": false,
+        "15-PortableTools": false,
+        "16-UnixEnvironment": false,
+        "17-VSCodeSetup": false,
+        "18-FinalConfig": true
+    },
+    "apps_skip": [],
+    "privacy_level": "standard"
+}

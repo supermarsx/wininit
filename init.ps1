@@ -1,4 +1,15 @@
 ﻿#Requires -RunAsAdministrator
+param(
+    [string]$ConfigFile = "",
+    [string]$Profile = "",
+    [string[]]$SkipModules = @(),
+    [string[]]$OnlyModules = @(),
+    [switch]$DryRun,
+    [switch]$Update,
+    [switch]$Help,
+    [switch]$Resume,  # Resume from last checkpoint (set automatically after reboot)
+    [switch]$Parallel # Opt-in: run independent modules concurrently
+)
 # ============================================================================
 # WinInit - Windows Initialization & Customization Script
 # Orchestrator - preflight checks, loads shared library, runs all modules
@@ -65,8 +76,164 @@ if (-not (Test-Path $commonLib)) {
 }
 . $commonLib
 
-# --- Set total steps (preflight + 18 modules) ---
-$script:TotalSteps = 20
+# --- Load safety/risk indicator library ---
+$safetyLib = "$PSScriptRoot\lib\safety.ps1"
+if (-not (Test-Path $safetyLib)) {
+    Write-Host "  FATAL: lib\safety.ps1 not found at $safetyLib" -ForegroundColor Red
+    Write-Host "  Ensure the full WinInit package is extracted correctly." -ForegroundColor Red
+    pause
+    exit 1
+}
+. $safetyLib
+
+# --- Load checkpoint/resume library ---
+$checkpointLib = "$PSScriptRoot\lib\checkpoint.ps1"
+if (Test-Path $checkpointLib) { . $checkpointLib }
+
+# --- Load rollback library ---
+$rollbackLib = "$PSScriptRoot\lib\rollback.ps1"
+if (Test-Path $rollbackLib) { . $rollbackLib }
+
+# --- Load community module loader ---
+$communityLib = "$PSScriptRoot\lib\community.ps1"
+if (Test-Path $communityLib) { . $communityLib }
+
+# --- Load progress dashboard ---
+$dashboardLib = "$PSScriptRoot\lib\dashboard.ps1"
+if (Test-Path $dashboardLib) { . $dashboardLib }
+
+# --- Load parallel execution library ---
+$parallelLib = "$PSScriptRoot\lib\parallel.ps1"
+if (Test-Path $parallelLib) { . $parallelLib }
+
+# ============================================================================
+# CLI: Help, Config, Profile, Dry-Run, Update
+# ============================================================================
+
+# --- Help ---
+if ($Help) {
+    Show-WinInitHelp
+    exit 0
+}
+
+# --- Update mode (quick: just upgrade all packages) ---
+if ($Update) {
+    Write-Host ""
+    Write-Host "  WinInit - Update Mode" -ForegroundColor Cyan
+    Write-Host "  Running winget upgrade --all ..." -ForegroundColor Gray
+    Write-Host ""
+    $wingetExe = Get-Command winget -ErrorAction SilentlyContinue
+    if ($wingetExe) {
+        & winget upgrade --all --silent --accept-source-agreements --accept-package-agreements
+        Write-Host ""
+        Write-Host "  Update complete." -ForegroundColor Green
+    } else {
+        Write-Host "  ERROR: winget not found. Run full init first." -ForegroundColor Red
+    }
+    exit 0
+}
+
+# --- Load TOML config ---
+$configPath = if ($ConfigFile) { $ConfigFile } else { Join-Path $PSScriptRoot "config.toml" }
+$tomlConfig = @{}
+if (Test-Path $configPath) {
+    $tomlConfig = Read-TomlConfig -Path $configPath
+    # Don't log yet (log file not initialized), store for later
+}
+
+# --- Determine active profile ---
+# Priority: CLI -Profile > config.toml [general].profile > "full" (default)
+$activeProfile = "full"
+if ($tomlConfig.ContainsKey("general") -and $tomlConfig["general"].ContainsKey("profile")) {
+    $activeProfile = $tomlConfig["general"]["profile"]
+}
+if ($Profile) { $activeProfile = $Profile }
+
+# --- Load profile JSON ---
+$profilesDir = Join-Path $PSScriptRoot "profiles"
+$profileConfig = Read-ProfileConfig -ProfileName $activeProfile -ProfilesDir $profilesDir
+
+# --- Build effective module enable/disable map ---
+# Start with all enabled, then layer: profile -> config.toml -> CLI overrides
+$moduleEnabled = @{}
+$allModuleNames = @(
+    "01-PackageManagers", "02-Applications", "03-DesktopEnvironment",
+    "04-OneDriveRemoval", "05-Performance", "06-Debloat", "07-Privacy",
+    "08-QualityOfLife", "09-Services", "10-NetworkPerformance", "11-VisualUX",
+    "12-SecurityHardening", "13-BrowserExtensions", "14-DevTools",
+    "15-PortableTools", "16-UnixEnvironment", "17-VSCodeSetup", "18-FinalConfig"
+)
+foreach ($m in $allModuleNames) { $moduleEnabled[$m] = $true }
+
+# Layer 1: Profile
+if ($profileConfig -and $profileConfig.modules) {
+    foreach ($prop in $profileConfig.modules.PSObject.Properties) {
+        $moduleEnabled[$prop.Name] = [bool]$prop.Value
+    }
+}
+
+# Layer 2: config.toml [modules] section
+if ($tomlConfig.ContainsKey("modules")) {
+    foreach ($key in $tomlConfig["modules"].Keys) {
+        if ($moduleEnabled.ContainsKey($key)) {
+            $moduleEnabled[$key] = [bool]$tomlConfig["modules"][$key]
+        }
+    }
+}
+
+# Layer 3: CLI -SkipModules
+foreach ($skip in $SkipModules) {
+    # Match by number prefix or full name
+    $matched = $allModuleNames | Where-Object { $_ -eq $skip -or $_ -like "$skip-*" }
+    foreach ($m in $matched) { $moduleEnabled[$m] = $false }
+}
+
+# Layer 4: CLI -OnlyModules (overrides everything - disable all, then enable only listed)
+if ($OnlyModules.Count -gt 0) {
+    foreach ($m in $allModuleNames) { $moduleEnabled[$m] = $false }
+    foreach ($only in $OnlyModules) {
+        $matched = $allModuleNames | Where-Object { $_ -eq $only -or $_ -like "$only-*" }
+        foreach ($m in $matched) { $moduleEnabled[$m] = $true }
+    }
+}
+
+# --- Dry-run mode ---
+# Priority: CLI -DryRun > config.toml [general].dry_run
+if ($DryRun) {
+    $script:DryRunMode = $true
+} elseif ($tomlConfig.ContainsKey("general") -and $tomlConfig["general"].ContainsKey("dry_run")) {
+    $script:DryRunMode = [bool]$tomlConfig["general"]["dry_run"]
+}
+
+# --- Apps skip list ---
+# Merge profile + config.toml skip lists
+$script:AppsSkip = @()
+if ($profileConfig -and $profileConfig.apps_skip) {
+    $script:AppsSkip += @($profileConfig.apps_skip)
+}
+if ($tomlConfig.ContainsKey("apps") -and $tomlConfig["apps"].ContainsKey("skip")) {
+    $skipVal = $tomlConfig["apps"]["skip"]
+    if ($skipVal -and @($skipVal).Count -gt 0) {
+        $script:AppsSkip += @($skipVal)
+    }
+}
+$script:AppsSkip = @($script:AppsSkip | Where-Object { $_ } | Select-Object -Unique)
+
+# --- Privacy level ---
+$script:PrivacyLevel = "strict"
+if ($profileConfig -and $profileConfig.privacy_level) {
+    $script:PrivacyLevel = $profileConfig.privacy_level
+}
+if ($tomlConfig.ContainsKey("privacy") -and $tomlConfig["privacy"].ContainsKey("level")) {
+    $script:PrivacyLevel = $tomlConfig["privacy"]["level"]
+}
+
+# --- Store full config for modules to reference ---
+$script:Config = $tomlConfig
+
+# --- Count enabled modules for TotalSteps ---
+$enabledCount = @($moduleEnabled.Values | Where-Object { $_ -eq $true }).Count
+$script:TotalSteps = $enabledCount + 2  # preflight + enabled modules + summary
 
 # --- Initialize log file ---
 if (Test-Path $script:LogFile) {
@@ -82,10 +249,12 @@ if (Test-Path $script:LogFile) {
 $osInfo = (Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue).Caption
 $ramGB = [math]::Round((Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).TotalPhysicalMemory / 1GB, 0)
 
+$dryTag = if ($script:DryRunMode) { " [DRY RUN]" } else { "" }
+
 Write-Banner -Title "W I N I N I T" `
     -Subtitle "Windows Initialization & Customization Script" `
     -Info @(
-        "18 Modules | Full Automation | Zero Interaction",
+        "$enabledCount/$($allModuleNames.Count) Modules | Profile: $activeProfile | Privacy: $($script:PrivacyLevel)$dryTag",
         "User: $env:USERNAME@$env:COMPUTERNAME | RAM: ${ramGB}GB",
         "OS: $osInfo",
         "PS: $($Host.Name) v$($Host.Version) | VT: $($script:VTEnabled)",
@@ -93,9 +262,31 @@ Write-Banner -Title "W I N I N I T" `
     )
 
 Write-Log "WinInit started" "INFO"
+Write-Log "Profile: $activeProfile | Modules: $enabledCount/$($allModuleNames.Count) | Dry-run: $($script:DryRunMode)" "INFO"
+Write-Log "Config file: $configPath" "DEBUG"
+Write-Log "Privacy level: $($script:PrivacyLevel)" "DEBUG"
+if ($script:AppsSkip.Count -gt 0) {
+    Write-Log "Apps skip list: $($script:AppsSkip -join ', ')" "DEBUG"
+}
+$skippedMods = @($moduleEnabled.GetEnumerator() | Where-Object { -not $_.Value } | ForEach-Object { $_.Key }) -join ", "
+if ($skippedMods) { Write-Log "Skipped modules: $skippedMods" "INFO" }
 Write-Log "Log file: $($script:LogFile)" "DEBUG"
 Write-Log "VT color support: $($script:VTEnabled)" "DEBUG"
 Write-Log "PowerShell host: $($Host.Name) v$($Host.Version)" "DEBUG"
+
+# --- Dry-run banner ---
+if ($script:DryRunMode) {
+    Write-Host ""
+    if ($script:VTEnabled) {
+        $c = Get-C
+        [Console]::WriteLine("  $($c.Bold)$($c.BrYellow)*** DRY RUN MODE ***$($c.Reset)")
+        [Console]::WriteLine("  $($c.Yellow)No changes will be made to the system. All actions will be simulated.$($c.Reset)")
+    } else {
+        Write-Host "  *** DRY RUN MODE ***" -ForegroundColor Yellow
+        Write-Host "  No changes will be made to the system. All actions will be simulated." -ForegroundColor Yellow
+    }
+    Write-Host ""
+}
 
 # ============================================================================
 # PREFLIGHT CHECKS
@@ -396,50 +587,128 @@ if ($preflightPassed) {
 }
 
 # --- Create a restore point BEFORE making any changes ---
-Write-Log "Creating pre-WinInit restore point..." "INFO"
-try {
-    Enable-ComputerRestore -Drive "C:\" -ErrorAction SilentlyContinue
-    # Allow frequent restore points (default is 1 per 24h)
-    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" `
-        -Name "SystemRestorePointCreationFrequency" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-    Checkpoint-Computer -Description "WinInit Pre-Install" -RestorePointType "MODIFY_SETTINGS" -ErrorAction SilentlyContinue
-    Write-Log "Restore point 'WinInit Pre-Install' created" "OK"
-} catch {
-    Write-Log "Could not create restore point: $_ (continuing anyway)" "WARN"
+if (-not $script:DryRunMode) {
+    Write-Log "Creating pre-WinInit restore point..." "INFO"
+    try {
+        Enable-ComputerRestore -Drive "C:\" -ErrorAction SilentlyContinue
+        # Allow frequent restore points (default is 1 per 24h)
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" `
+            -Name "SystemRestorePointCreationFrequency" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+        Checkpoint-Computer -Description "WinInit Pre-Install" -RestorePointType "MODIFY_SETTINGS" -ErrorAction SilentlyContinue
+        Write-Log "Restore point 'WinInit Pre-Install' created" "OK"
+    } catch {
+        Write-Log "Could not create restore point: $_ (continuing anyway)" "WARN"
+    }
+} else {
+    Write-Log "[DRY RUN] Would create restore point 'WinInit Pre-Install'" "INFO"
 }
 
 # --- Disable Windows Defender real-time monitoring during install ---
 # Dramatically speeds up installs, extractions, and compilations
-Write-Log "Temporarily disabling Defender real-time monitoring for faster installs..." "INFO"
-try {
-    Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop
-    Write-Log "Defender real-time monitoring disabled (will re-enable at end)" "OK"
-} catch {
-    Write-Log "Could not disable Defender real-time monitoring: $_ (installs may be slower)" "WARN"
+if (-not $script:DryRunMode) {
+    Write-Log "Temporarily disabling Defender real-time monitoring for faster installs..." "INFO"
+    try {
+        Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop
+        Write-Log "Defender real-time monitoring disabled (will re-enable at end)" "OK"
+    } catch {
+        Write-Log "Could not disable Defender real-time monitoring: $_ (installs may be slower)" "WARN"
+    }
+} else {
+    Write-Log "[DRY RUN] Would disable Defender real-time monitoring" "INFO"
 }
 
 # --- Force show file extensions and hidden files IMMEDIATELY ---
-Write-Log "Configuring Explorer: show file extensions and hidden files" "INFO"
-$explorerReg = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
-Set-ItemProperty -Path $explorerReg -Name "HideFileExt"     -Value 0 -Type DWord
-Set-ItemProperty -Path $explorerReg -Name "Hidden"           -Value 1 -Type DWord
-Set-ItemProperty -Path $explorerReg -Name "ShowSuperHidden"  -Value 1 -Type DWord
-Write-Log "Explorer: HideFileExt=0, Hidden=1, ShowSuperHidden=1" "DEBUG"
-Write-Log "File extensions and hidden files now visible" "OK"
+if (-not $script:DryRunMode) {
+    Write-Log "Configuring Explorer: show file extensions and hidden files" "INFO"
+    $explorerReg = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    Set-ItemProperty -Path $explorerReg -Name "HideFileExt"     -Value 0 -Type DWord
+    Set-ItemProperty -Path $explorerReg -Name "Hidden"           -Value 1 -Type DWord
+    Set-ItemProperty -Path $explorerReg -Name "ShowSuperHidden"  -Value 1 -Type DWord
+    Write-Log "Explorer: HideFileExt=0, Hidden=1, ShowSuperHidden=1" "DEBUG"
+    Write-Log "File extensions and hidden files now visible" "OK"
+} else {
+    Write-Log "[DRY RUN] Would configure Explorer: show file extensions and hidden files" "INFO"
+    $script:DryRunStats.Registry += 3
+}
 
 # --- Ensure TLS 1.2 for all downloads ---
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
 Write-Log "TLS protocol set to TLS 1.2 + 1.3" "DEBUG"
 
 # --- Create required directories upfront ---
-Write-Log "Creating required directories..." "INFO"
-$requiredDirs = @("C:\bin", "C:\apps", "C:\venv", "C:\vcpkg")
-foreach ($dir in $requiredDirs) {
-    if (-not (Test-Path $dir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
-        Write-Log "Created directory: $dir" "OK"
-    } else {
-        Write-Log "Directory exists: $dir" "DEBUG"
+if (-not $script:DryRunMode) {
+    Write-Log "Creating required directories..." "INFO"
+    $requiredDirs = @("C:\bin", "C:\apps", "C:\venv", "C:\vcpkg")
+    foreach ($dir in $requiredDirs) {
+        if (-not (Test-Path $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            Write-Log "Created directory: $dir" "OK"
+        } else {
+            Write-Log "Directory exists: $dir" "DEBUG"
+        }
+    }
+} else {
+    Write-Log "[DRY RUN] Would create directories: C:\bin, C:\apps, C:\venv, C:\vcpkg" "INFO"
+}
+
+# ============================================================================
+# Graceful Ctrl+C / Interruption Handler
+# ============================================================================
+
+$script:Interrupted = $false
+$script:LastCompletedModuleIdx = -1
+
+[Console]::TreatControlCAsInput = $false
+
+# Register Ctrl+C handler via .NET event
+try {
+    [Console]::CancelKeyPress.Add({
+        param($sender, $e)
+        $e.Cancel = $true  # Don't kill the process immediately
+        $script:Interrupted = $true
+        Write-Host ""
+        Write-Host "  [!] Ctrl+C detected - finishing current operation..." -ForegroundColor Yellow
+        Write-Host "  [!] State will be saved. Run again with -Resume to continue." -ForegroundColor Yellow
+    })
+} catch {
+    Write-Log "Could not register Ctrl+C handler: $_" "WARN"
+}
+
+# Register PowerShell.Exiting event as backup
+$null = Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
+    $script:Interrupted = $true
+} -ErrorAction SilentlyContinue
+
+# ============================================================================
+# Initialize Rollback System
+# ============================================================================
+
+Initialize-Rollback
+
+# ============================================================================
+# Check for Resume from Checkpoint
+# ============================================================================
+
+$resumeFromIndex = 0
+$isResuming = $false
+if ($Resume -or (Test-Path $script:CheckpointFile)) {
+    $checkpoint = Get-Checkpoint
+    if ($checkpoint -and $checkpoint.status -in @("paused", "rebooting", "in_progress")) {
+        $resumeFromIndex = $checkpoint.last_completed_module + 1
+        $isResuming = $true
+        Write-Log "Resuming from checkpoint: module index $resumeFromIndex ($($checkpoint.last_module_file) was last completed)" "INFO"
+        Write-Host ""
+        Write-Host "  Resuming from previous run..." -ForegroundColor Cyan
+        Write-Host "  (Last completed: $($checkpoint.last_module_file))" -ForegroundColor Gray
+        Write-Host ""
+
+        # Remove RunOnce key if we were called from a reboot resume
+        if ($Resume) {
+            Unregister-RebootResume
+        }
+    } elseif ($checkpoint -and $checkpoint.status -eq "completed") {
+        Write-Log "Previous run completed successfully - starting fresh" "INFO"
+        Remove-Checkpoint
     }
 }
 
@@ -471,55 +740,181 @@ $modules = @(
 $failed  = @()
 $skipped = @()
 $modTimings = @()
+$runIndex = 0    # tracks position among enabled modules for display
 
-foreach ($mod in $modules) {
-    $modPath = Join-Path $PSScriptRoot "modules\$($mod.file)"
-    $modStart = Get-Date
+# --- Initialize progress dashboard ---
+if (Get-Command Initialize-Dashboard -ErrorAction SilentlyContinue) {
+    Initialize-Dashboard -TotalModules $modules.Count
+    Write-Log "Progress dashboard initialized" "DEBUG"
+}
 
-    if (Test-Path $modPath) {
-        $modIndex = [array]::IndexOf($modules, $mod) + 1
-        Write-ModuleStart -File "[$modIndex/$($modules.Count)] $($mod.file)" -Description $mod.desc
-        Write-Log "Loading module: $($mod.file)" "INFO"
+if ($isResuming -and $resumeFromIndex -gt 0) {
+    Write-Host "  Skipping modules 1-$resumeFromIndex (already completed)" -ForegroundColor Gray
+    Write-Host ""
+}
 
-        try {
-            . $modPath
-            # Stop the section spinner (started by Write-Section inside the module)
-            $modDuration = (Get-Date) - $modStart
-            Stop-Spinner -FinalMessage "$($mod.file) done ($("{0:N1}s" -f $modDuration.TotalSeconds))" -Status "OK"
-            $modTimings += @{ name = $mod.file; duration = $modDuration; status = "OK" }
-        } catch {
-            $modDuration = (Get-Date) - $modStart
-            Stop-Spinner -FinalMessage "$($mod.file) FAILED" -Status "ERROR"
-            $errorMsg = $_.Exception.Message
-            $errorLine = $_.InvocationInfo.ScriptLineNumber
-            $errorScript = $_.InvocationInfo.ScriptName
-            Write-Log "MODULE FAILED: $($mod.file)" "ERROR"
-            Write-Log "  Error: $errorMsg" "ERROR"
-            Write-Log "  At: $errorScript line $errorLine" "ERROR"
-            Write-Log "  Stack: $($_.ScriptStackTrace)" "ERROR"
-            $failed += $mod.file
-            $modTimings += @{ name = $mod.file; duration = $modDuration; status = "FAIL" }
-        }
+# --- Parallel mode (opt-in, disabled during resume) ---
+if ($Parallel -and -not $isResuming -and (Get-Command Invoke-ModulesWithParallel -ErrorAction SilentlyContinue)) {
+    Write-Log "PARALLEL MODE enabled - independent modules will run concurrently" "WARN"
+    if ($script:VTEnabled) {
+        $c = Get-C
+        [Console]::WriteLine("  $($c.Bold)$($c.BrMagenta)Parallel mode: ON$($c.Reset) $($c.Gray)- independent modules run concurrently$($c.Reset)")
     } else {
-        Write-Log "MODULE NOT FOUND: $modPath" "ERROR"
-        $skipped += $mod.file
-        $modTimings += @{ name = $mod.file; duration = [timespan]::Zero; status = "SKIP" }
+        Write-Host "  Parallel mode: ON - independent modules run concurrently" -ForegroundColor Magenta
     }
 
-    # Refresh PATH after each module (some modules install tools that later modules need)
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
-                [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $parallelResult = Invoke-ModulesWithParallel -Modules $modules -ScriptRoot $PSScriptRoot -CommonLib $commonLib
+    $failed     = $parallelResult.Failed
+    $skipped    = $parallelResult.Skipped
+    $modTimings = $parallelResult.ModTimings
+} else {
+    # --- Default: sequential execution ---
+    if ($Parallel -and $isResuming) {
+        Write-Log "Parallel mode disabled during resume - running sequentially" "WARN"
+    } elseif ($Parallel) {
+        Write-Log "Parallel mode requested but lib/parallel.ps1 not loaded - falling back to sequential" "WARN"
+    }
+
+    for ($i = 0; $i -lt $modules.Count; $i++) {
+        $mod = $modules[$i]
+        $modIndex = $i + 1
+
+        # --- Filter: skip disabled modules based on config/profile/CLI ---
+        $modName = $mod.file -replace '\.ps1$', ''
+        if ($moduleEnabled.ContainsKey($modName) -and -not $moduleEnabled[$modName]) {
+            Write-Log "Skipping module (disabled): $($mod.file)" "INFO"
+            $skipped += $mod.file
+            $modTimings += @{ name = $mod.file; duration = [timespan]::Zero; status = "SKIP" }
+            if (Get-Command Update-Dashboard -ErrorAction SilentlyContinue) {
+                Update-Dashboard -ModuleIndex $modIndex -ModuleName $mod.file -Status "skipped"
+            }
+            continue
+        }
+
+        # --- Resume: skip modules already completed in a previous run ---
+        if ($i -lt $resumeFromIndex) {
+            Write-Log "Skipping module (already completed): $($mod.file)" "DEBUG"
+            $skipped += $mod.file
+            $modTimings += @{ name = $mod.file; duration = [timespan]::Zero; status = "SKIP" }
+            if (Get-Command Update-Dashboard -ErrorAction SilentlyContinue) {
+                Update-Dashboard -ModuleIndex $modIndex -ModuleName $mod.file -Status "skipped"
+            }
+            continue
+        }
+
+        $runIndex++
+        $modPath = Join-Path $PSScriptRoot "modules\$($mod.file)"
+        $modStart = Get-Date
+
+        if (Test-Path $modPath) {
+            # --- Dashboard: show status before module starts ---
+            if (Get-Command Update-Dashboard -ErrorAction SilentlyContinue) {
+                Update-Dashboard -ModuleIndex $modIndex -ModuleName $mod.file -Status "running"
+            }
+
+            Write-ModuleStart -File "[$runIndex/$enabledCount] $($mod.file)" -Description $mod.desc
+            Write-Log "Loading module: $($mod.file)" "INFO"
+
+            try {
+                . $modPath
+                # Stop the section spinner (started by Write-Section inside the module)
+                $modDuration = (Get-Date) - $modStart
+                Stop-Spinner -FinalMessage "$($mod.file) done ($("{0:N1}s" -f $modDuration.TotalSeconds))" -Status "OK"
+                $modTimings += @{ name = $mod.file; duration = $modDuration; status = "OK" }
+
+                # --- Dashboard: mark completed ---
+                if (Get-Command Update-Dashboard -ErrorAction SilentlyContinue) {
+                    Update-Dashboard -ModuleIndex $modIndex -ModuleName $mod.file -Status "completed"
+                }
+            } catch {
+                $modDuration = (Get-Date) - $modStart
+                Stop-Spinner -FinalMessage "$($mod.file) FAILED" -Status "ERROR"
+                $errorMsg = $_.Exception.Message
+                $errorLine = $_.InvocationInfo.ScriptLineNumber
+                $errorScript = $_.InvocationInfo.ScriptName
+                Write-Log "MODULE FAILED: $($mod.file)" "ERROR"
+                Write-Log "  Error: $errorMsg" "ERROR"
+                Write-Log "  At: $errorScript line $errorLine" "ERROR"
+                Write-Log "  Stack: $($_.ScriptStackTrace)" "ERROR"
+                $failed += $mod.file
+                $modTimings += @{ name = $mod.file; duration = $modDuration; status = "FAIL" }
+
+                # --- Dashboard: mark failed ---
+                if (Get-Command Update-Dashboard -ErrorAction SilentlyContinue) {
+                    Update-Dashboard -ModuleIndex $modIndex -ModuleName $mod.file -Status "failed"
+                }
+            }
+        } else {
+            Write-Log "MODULE NOT FOUND: $modPath" "ERROR"
+            $skipped += $mod.file
+            $modTimings += @{ name = $mod.file; duration = [timespan]::Zero; status = "SKIP" }
+            if (Get-Command Update-Dashboard -ErrorAction SilentlyContinue) {
+                Update-Dashboard -ModuleIndex $modIndex -ModuleName $mod.file -Status "skipped"
+            }
+        }
+
+        # Save checkpoint and rollback data after each module
+        $script:LastCompletedModuleIdx = $i
+        Save-Checkpoint -LastCompletedModule $i -LastModuleFile $mod.file -Status "in_progress"
+        Save-Rollback
+
+        # Check for Ctrl+C interruption
+        if ($script:Interrupted) {
+            Save-Checkpoint -LastCompletedModule $i -LastModuleFile $mod.file -Status "paused"
+            Save-Rollback
+            Write-Log "Execution paused by user after module $($mod.file)" "WARN"
+            Write-Host ""
+            Write-Host "  Execution paused. Run init.ps1 -Resume to continue from module $($i + 2)." -ForegroundColor Yellow
+            break
+        }
+
+        # Refresh PATH after each module (some modules install tools that later modules need)
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+                    [System.Environment]::GetEnvironmentVariable("Path", "User")
+    }
+}
+
+# ============================================================================
+# Community Modules
+# ============================================================================
+
+if (Get-Command Invoke-CommunityModules -ErrorAction SilentlyContinue) {
+    $communityResults = Invoke-CommunityModules
+    if ($communityResults -and $communityResults.Count -gt 0) {
+        foreach ($cr in $communityResults) {
+            $modTimings += @{ name = $cr.name; duration = $cr.duration; status = $cr.status }
+            if ($cr.status -eq "FAIL") { $failed += $cr.name }
+            if ($cr.status -eq "BLOCKED") { $skipped += $cr.name }
+        }
+    }
+}
+
+# ============================================================================
+# Finalize Checkpoint & Rollback
+# ============================================================================
+if (-not $script:Interrupted) {
+    # All modules completed - mark checkpoint as done and clean up
+    Save-Checkpoint -LastCompletedModule ($modules.Count - 1) -LastModuleFile $modules[-1].file -Status "completed"
+    Save-Rollback
+    Remove-Checkpoint
+    Unregister-RebootResume
+    Write-Log "All modules completed - checkpoint cleared" "DEBUG"
+} else {
+    # Interrupted - final rollback save (checkpoint already saved in loop)
+    Save-Rollback
 }
 
 # ============================================================================
 # Re-enable Windows Defender real-time monitoring
 # ============================================================================
-Write-Log "Re-enabling Defender real-time monitoring..." "INFO"
-try {
-    Set-MpPreference -DisableRealtimeMonitoring $false -ErrorAction Stop
-    Write-Log "Defender real-time monitoring re-enabled" "OK"
-} catch {
-    Write-Log "Could not re-enable Defender: $_ (may need manual re-enable)" "WARN"
+if (-not $script:DryRunMode) {
+    Write-Log "Re-enabling Defender real-time monitoring..." "INFO"
+    try {
+        Set-MpPreference -DisableRealtimeMonitoring $false -ErrorAction Stop
+        Write-Log "Defender real-time monitoring re-enabled" "OK"
+    } catch {
+        Write-Log "Could not re-enable Defender: $_ (may need manual re-enable)" "WARN"
+    }
 }
 
 # ============================================================================
@@ -536,6 +931,11 @@ Write-Blank 2
 # Module timing report
 Write-TimingReport $modTimings
 
+# Dashboard summary (weighted progress view)
+if (Get-Command Write-DashboardSummary -ErrorAction SilentlyContinue) {
+    Write-DashboardSummary
+}
+
 Write-Blank
 
 # Stats line
@@ -543,19 +943,27 @@ Write-Rule -Char "=" -Width 70 -Color "Cyan"
 Write-Blank
 Write-StatsLine @{
     Duration  = $durationStr
-    Modules   = "$($modules.Count)"
+    Profile   = $activeProfile
+    Modules   = "$enabledCount/$($modules.Count)"
     Succeeded = "$succeeded"
     Failed    = "$($failed.Count)"
     Skipped   = "$($skipped.Count)"
 }
 Write-Blank
 
+# Dry-run summary (shows what WOULD have happened)
+if ($script:DryRunMode) {
+    Write-DryRunSummary
+}
+
 # Get updated disk space
 $freeGBNow = [math]::Round((Get-PSDrive -Name ($env:SystemDrive.TrimEnd(':')) -ErrorAction SilentlyContinue).Free / 1GB, 1)
 
+$modeLabel = if ($script:DryRunMode) { "DRY RUN" } else { "Complete" }
 $summaryLines = @(
     "Duration:    $durationStr",
-    "Modules:     $($modules.Count) total",
+    "Profile:     $activeProfile",
+    "Modules:     $enabledCount of $($modules.Count) enabled",
     "Succeeded:   $succeeded",
     "Failed:      $($failed.Count)",
     "Skipped:     $($skipped.Count)",
@@ -573,10 +981,10 @@ if ($failed.Count -gt 0) {
     foreach ($f in $failed) { $summaryLines += "  ! $f" }
 }
 
-Write-SummaryBox "WinInit Complete!" $summaryLines
+Write-SummaryBox "WinInit $modeLabel!" $summaryLines
 
 Write-Log "WinInit finished in $durationStr" "INFO"
-Write-Log "Succeeded: $succeeded | Failed: $($failed.Count) | Skipped: $($skipped.Count)" "INFO"
+Write-Log "Profile: $activeProfile | Succeeded: $succeeded | Failed: $($failed.Count) | Skipped: $($skipped.Count)" "INFO"
 Write-Log "Log saved to: $($script:LogFile)" "INFO"
 if ($failed.Count -gt 0) {
     foreach ($f in $failed) { Write-Log "FAILED module: $f" "ERROR" }

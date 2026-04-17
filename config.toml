@@ -1,0 +1,45 @@
+# ============================================================================
+# WinInit Configuration
+# Edit this file to customize your setup, or use: .\init.ps1 -Profile <name>
+# ============================================================================
+
+[general]
+profile = "developer"       # developer | security | minimal | creative | office | full
+dry_run = false
+log_level = "INFO"          # DEBUG | INFO | WARN | ERROR
+
+[modules]
+# Set to false to skip a module
+"01-PackageManagers" = true
+"02-Applications" = true
+"03-DesktopEnvironment" = true
+"04-OneDriveRemoval" = true
+"05-Performance" = true
+"06-Debloat" = true
+"07-Privacy" = true
+"08-QualityOfLife" = true
+"09-Services" = true
+"10-NetworkPerformance" = true
+"11-VisualUX" = true
+"12-SecurityHardening" = true
+"13-BrowserExtensions" = true
+"14-DevTools" = true
+"15-PortableTools" = true
+"16-UnixEnvironment" = true
+"17-VSCodeSetup" = true
+"18-FinalConfig" = true
+
+[apps]
+# Override which apps to install/skip (app names from Module 02)
+skip = []
+# extra = []  # Additional winget IDs to install
+
+[privacy]
+# Privacy aggressiveness: "standard" | "strict" | "paranoid"
+level = "strict"
+block_telemetry_hosts = false    # Add telemetry domains to hosts file
+
+[updates]
+# Auto-update schedule after initial setup
+enable_scheduled_updates = true
+update_interval_days = 7

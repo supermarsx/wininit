@@ -1,0 +1,26 @@
+{
+    "name": "developer",
+    "description": "Full development environment with all toolchains",
+    "modules": {
+        "01-PackageManagers": true,
+        "02-Applications": true,
+        "03-DesktopEnvironment": true,
+        "04-OneDriveRemoval": true,
+        "05-Performance": true,
+        "06-Debloat": true,
+        "07-Privacy": true,
+        "08-QualityOfLife": true,
+        "09-Services": true,
+        "10-NetworkPerformance": true,
+        "11-VisualUX": true,
+        "12-SecurityHardening": true,
+        "13-BrowserExtensions": true,
+        "14-DevTools": true,
+        "15-PortableTools": true,
+        "16-UnixEnvironment": true,
+        "17-VSCodeSetup": true,
+        "18-FinalConfig": true
+    },
+    "apps_skip": ["Blender.Blender", "OBSProject.OBSStudio"],
+    "privacy_level": "strict"
+}
