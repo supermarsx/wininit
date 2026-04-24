@@ -12,8 +12,6 @@
   <a href="#usage">Usage</a>
 </p>
 
----
-
 ## Quick Start
 
 **One-liner** (paste into an elevated PowerShell window):
@@ -29,8 +27,6 @@ git clone https://github.com/supermarsx/wininit.git
 cd wininit
 .\launch.bat
 ```
-
----
 
 ## Features
 
@@ -51,8 +47,6 @@ cd wininit
 - **Community modules** -- drop custom `.ps1` scripts into `modules/community/`
 - **JUnit XML test output** -- CI-ready test suite with 200+ assertions
 - **Zero interaction** -- runs fully unattended from start to finish
-
----
 
 ## Modules
 
@@ -76,8 +70,6 @@ cd wininit
 | 16 | Unix Environment      | Cygwin, Perl, Python venv, Go workspace, Unix-style PATH |
 | 17 | VS Code Setup         | Extensions, settings, Nerd Fonts, terminal theme, Oh My Posh |
 | 18 | Final Config          | Uptime-safe Windows Update policy, System Restore point, cleanup, startup optimization |
-
----
 
 ## Configuration
 
@@ -133,8 +125,6 @@ scheduled_update_time = "4:00AM"
 
 **Priority order:** CLI flags > `config.toml` > profile defaults > built-in defaults.
 
----
-
 ## Profiles
 
 Profiles are JSON files in the `profiles/` directory. Each one enables or disables modules and sets a privacy level.
@@ -160,8 +150,6 @@ Or set it in `config.toml`:
 [general]
 profile = "security"
 ```
-
----
 
 ## Usage
 
@@ -203,8 +191,6 @@ profile = "security"
 .\init.ps1 -Help
 ```
 
----
-
 ## Safety Indicators
 
 Every tweak is tagged with a risk level so you know exactly what is happening:
@@ -225,8 +211,6 @@ The final summary shows a breakdown:
     [A] Aggressive (security / kernel-level):         7
 ```
 
----
-
 ## Reboot Resilience
 
 WinInit saves a checkpoint after each module completes. If the system reboots (e.g., after enabling Hyper-V) or the script is interrupted:
@@ -236,8 +220,6 @@ WinInit saves a checkpoint after each module completes. If the system reboots (e
 3. Running `.\init.ps1 -Resume` picks up where it left off
 
 The checkpoint includes the module index, timestamp, username, and any extra state needed for continuation.
-
----
 
 ## Undo / Rollback
 
@@ -263,8 +245,6 @@ Supported rollback types:
 
 `undo.ps1` is fully self-contained and does not depend on `lib/common.ps1`.
 
----
-
 ## Community Modules
 
 Extend WinInit with your own scripts. Drop `.ps1` files into `modules/community/`:
@@ -288,8 +268,6 @@ Community modules:
 - Are sorted alphabetically by filename
 
 See [`modules/community/README.md`](modules/community/README.md) for the full guide and a template.
-
----
 
 ## What Gets Installed
 
@@ -334,8 +312,6 @@ See [`modules/community/README.md`](modules/community/README.md) for the full gu
 
 </details>
 
----
-
 ## Privacy and Security
 
 **Module 07 (Privacy)** applies 40+ tweaks across these categories:
@@ -361,8 +337,6 @@ See [`modules/community/README.md`](modules/community/README.md) for the full gu
 - BitLocker readiness checks
 - Credential Guard configuration
 
----
-
 ## Comparison
 
 | Feature                    | WinInit | WinUtil | Win11Debloat | Sophia Script |
@@ -379,8 +353,6 @@ See [`modules/community/README.md`](modules/community/README.md) for the full gu
 | Community modules          | Yes     | No      | No          | No            |
 | Portable CLI tools         | Yes     | No      | No          | No            |
 | JUnit test output          | Yes     | No      | No          | No            |
-
----
 
 ## Running Tests
 
@@ -411,8 +383,6 @@ Test files:
 
 CI integration: the test runner returns a non-zero exit code on failure and supports `-JUnit` for XML report generation. A GitHub Actions workflow can run `.\tests\Run-AllTests.ps1 -JUnit results.xml -DryRun` on every push.
 
----
-
 ## Requirements
 
 | Requirement       | Details                                                    |
@@ -423,8 +393,6 @@ CI integration: the test runner returns a non-zero exit code on failure and supp
 | **Disk Space**    | 10 GB+ free on the system drive                            |
 | **Internet**      | Required for downloads (winget, Chocolatey, GitHub, etc.)  |
 | **Architecture**  | x64 (AMD64) or ARM64                                       |
-
----
 
 ## Project Structure
 
@@ -453,8 +421,6 @@ wininit/
     Test-Common.ps1     Test-Init.ps1  Test-Modules.ps1
     Test-Config.ps1     Test-Infrastructure.ps1  Test-Privacy.ps1
 ```
-
----
 
 ## License
 
