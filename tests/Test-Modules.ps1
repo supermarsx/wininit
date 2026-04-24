@@ -830,8 +830,9 @@ if (& $shouldRun "module-content") {
     # --- Module 18: Final Config ---
     if ($moduleContents.ContainsKey("18-FinalConfig")) {
         $c18 = $moduleContents["18-FinalConfig"]
-        Test-Assert "Mod18: Contains Windows Update policy configuration" {
-            $c18 -match 'WindowsUpdate|AUOptions|DeferQualityUpdates'
+        Test-Assert "Mod18: Contains uptime-safe Windows Update policy configuration" {
+            ($c18 -match 'WindowsUpdate|AUOptions|TargetReleaseVersion') -and
+            ($c18 -match 'NoAutoRebootWithLoggedOnUsers|Remove-ItemProperty|windows_update_install_mode')
         }
         Test-Assert "Mod18: Contains restore point creation" { $c18 -match 'Checkpoint-Computer|restore point' }
         Test-Assert "Mod18: Contains cleanup operations" { $c18 -match '(?i)cleanup|Cleanup-Image|temp' }

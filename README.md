@@ -44,6 +44,7 @@ cd wininit
 - **18 modular stages** -- skip any module, run any subset
 - **6 built-in profiles** -- developer, security, minimal, creative, office, full
 - **TOML configuration** -- fine-grained control without editing scripts
+- **Uptime-safe Windows Update defaults** -- notify/manual installs, no forced restart deadlines, feature-release pinning
 - **Checkpoint/Resume** -- survives reboots and Ctrl+C interruptions
 - **Full rollback** -- every change is recorded; `undo.ps1` reverts them
 - **Risk indicators** -- every tweak tagged [S]afe, [M]oderate, or [A]ggressive
@@ -76,7 +77,7 @@ cd wininit
 | 15 | Portable Tools        | Downloads CLI tools to `C:\bin` and `C:\apps` (jq, fzf, ripgrep, etc.) |
 | 16 | Unix Environment      | Cygwin, Perl, Python venv, Go workspace, Unix-style PATH |
 | 17 | VS Code Setup         | Extensions, settings, Nerd Fonts, terminal theme, Oh My Posh |
-| 18 | Final Config          | Windows Update, System Restore point, cleanup, startup optimization |
+| 18 | Final Config          | Uptime-safe Windows Update policy, System Restore point, cleanup, startup optimization |
 
 ---
 
@@ -119,9 +120,18 @@ level = "strict"            # standard | strict | paranoid
 block_telemetry_hosts = false
 
 [updates]
-enable_scheduled_updates = true
+# Windows Update policy: "notify" = AUOptions 2, "auto_download" = AUOptions 3
+windows_update_install_mode = "notify"
+pin_current_feature_release = true
+target_release_version = ""            # Empty = pin to the current DisplayVersion
+
+# Optional package-maintenance task for update.ps1
+enable_scheduled_updates = false
 update_interval_days = 7
+scheduled_update_time = "4:00AM"
 ```
+
+`[updates]` controls two different things: Windows Update policy for the OS itself, and the optional scheduled task that runs `update.ps1` for package-manager maintenance. The default profile favors uptime on long-running boxes: no forced restart deadlines, no scheduled OS install window, and no automatic WinInit update task unless you opt in.
 
 **Priority order:** CLI flags > `config.toml` > profile defaults > built-in defaults.
 

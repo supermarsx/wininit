@@ -365,8 +365,12 @@ level = "paranoid"
 block_telemetry_hosts = true
 
 [updates]
+windows_update_install_mode = "notify"
+pin_current_feature_release = true
+target_release_version = "25H2"
 enable_scheduled_updates = false
 update_interval_days = 14
+scheduled_update_time = "2:30AM"
 "@ | Set-Content $tomlPath -Encoding UTF8
         $cfg = Read-TomlConfig -Path $tomlPath
         $cfg.ContainsKey("general") -and
@@ -376,7 +380,11 @@ update_interval_days = 14
         $cfg["general"]["profile"] -eq "full" -and
         $cfg["privacy"]["level"] -eq "paranoid" -and
         $cfg["privacy"]["block_telemetry_hosts"] -eq $true -and
-        $cfg["updates"]["update_interval_days"] -eq 14
+        $cfg["updates"]["windows_update_install_mode"] -eq "notify" -and
+        $cfg["updates"]["pin_current_feature_release"] -eq $true -and
+        $cfg["updates"]["target_release_version"] -eq "25H2" -and
+        $cfg["updates"]["update_interval_days"] -eq 14 -and
+        $cfg["updates"]["scheduled_update_time"] -eq "2:30AM"
     }
 
     # --- Test: empty file ---
@@ -488,7 +496,7 @@ if (& $shouldRun "profiles") {
             if (-not (Test-Path $path)) { return $false }
             $json = Get-Content $path -Raw | ConvertFrom-Json
             $moduleProps = $json.modules.PSObject.Properties.Name
-            $missing = $allModuleNames | Where-Object { $_ -notin $moduleProps }
+            $missing = @($allModuleNames | Where-Object { $_ -notin $moduleProps })
             $missing.Count -eq 0
         } -FailMessage "Profile '$profileName' is missing module entries"
     }

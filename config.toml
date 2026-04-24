@@ -40,6 +40,12 @@ level = "strict"
 block_telemetry_hosts = false    # Add telemetry domains to hosts file
 
 [updates]
-# Auto-update schedule after initial setup
-enable_scheduled_updates = true
+# Windows Update policy: "notify" = AUOptions 2, "auto_download" = AUOptions 3
+windows_update_install_mode = "notify"
+pin_current_feature_release = true
+target_release_version = ""            # Empty = pin to the current DisplayVersion
+
+# Optional package-maintenance task for update.ps1
+enable_scheduled_updates = false
 update_interval_days = 7
+scheduled_update_time = "4:00AM"

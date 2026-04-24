@@ -1,4 +1,4 @@
-﻿# Module: 18 - Final Config
+# Module: 18 - Final Config
 # Windows Update + System Restore + Startup/session restore + Explorer restart + done message
 
 Write-Section "Final Config" "Windows Update, System Restore, startup cleanup"
@@ -8,45 +8,140 @@ Write-Section "Final Config" "Windows Update, System Restore, startup cleanup"
 # ============================================================================
 
 $WUPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate"
-if (-not (Test-Path $WUPath)) { New-Item -Path $WUPath -Force | Out-Null }
 $AUPath = "$WUPath\AU"
-if (-not (Test-Path $AUPath)) { New-Item -Path $AUPath -Force | Out-Null }
+Ensure-RegKey $WUPath
+Ensure-RegKey $AUPath
 
-# --- Auto-install updates during the night ---
-Write-Log "Configuring auto-install during night hours..."
-# AUOptions: 4 = Auto download and schedule install
-Set-ItemProperty -Path $AUPath -Name "AUOptions" -Value 4 -Type DWord
-# Schedule install at 3:00 AM
-Set-ItemProperty -Path $AUPath -Name "ScheduledInstallTime" -Value 3 -Type DWord
-# Every day (0 = every day, 1-7 = specific day)
-Set-ItemProperty -Path $AUPath -Name "ScheduledInstallDay" -Value 0 -Type DWord
-# Allow installs during automatic maintenance
-Set-ItemProperty -Path $AUPath -Name "AutomaticMaintenanceEnabled" -Value 1 -Type DWord
-Write-Log "Updates scheduled to auto-install at 3:00 AM nightly" "OK"
+$updatesConfig = if ($script:Config -and $script:Config.ContainsKey("updates")) {
+    $script:Config["updates"]
+} else {
+    @{}
+}
 
-# --- Defer updates 7 days, then force restart ---
-Write-Log "Configuring 7-day deferral with forced restart..."
-# Defer quality updates by 7 days
-Set-ItemProperty -Path $WUPath -Name "DeferQualityUpdates"       -Value 1 -Type DWord
-Set-ItemProperty -Path $WUPath -Name "DeferQualityUpdatesPeriodInDays" -Value 7 -Type DWord
-# Defer feature updates by 30 days (less frequent, more disruptive)
-Set-ItemProperty -Path $WUPath -Name "DeferFeatureUpdates"       -Value 1 -Type DWord
-Set-ItemProperty -Path $WUPath -Name "DeferFeatureUpdatesPeriodInDays" -Value 30 -Type DWord
+$windowsUpdateInstallMode = "notify"
+if ($updatesConfig.ContainsKey("windows_update_install_mode") -and $updatesConfig["windows_update_install_mode"]) {
+    $windowsUpdateInstallMode = "$($updatesConfig["windows_update_install_mode"])"
+}
+$windowsUpdateInstallMode = $windowsUpdateInstallMode.ToLowerInvariant()
+if ($windowsUpdateInstallMode -notin @("notify", "auto_download")) {
+    Write-Log "Unknown updates.windows_update_install_mode '$windowsUpdateInstallMode' - falling back to 'notify'" "WARN"
+    $windowsUpdateInstallMode = "notify"
+}
 
-# After 7 days from install-ready: force restart (engaged restart)
-Set-ItemProperty -Path $AUPath -Name "NoAutoRebootWithLoggedOnUsers" -Value 1 -Type DWord
-# Set deadline: auto-restart 7 days after update is available
-$DeadlinePath = "$WUPath"
-Set-ItemProperty -Path $DeadlinePath -Name "SetComplianceDeadline"                -Value 1 -Type DWord
-Set-ItemProperty -Path $DeadlinePath -Name "ConfigureDeadlineForQualityUpdates"   -Value 7 -Type DWord
-Set-ItemProperty -Path $DeadlinePath -Name "ConfigureDeadlineForFeatureUpdates"   -Value 14 -Type DWord
-Set-ItemProperty -Path $DeadlinePath -Name "ConfigureDeadlineGracePeriod"         -Value 2 -Type DWord
-Set-ItemProperty -Path $DeadlinePath -Name "ConfigureDeadlineGracePeriodForFeatureUpdates" -Value 3 -Type DWord
-# No restart during active hours (8 AM - 2 AM = basically only restart 2-8 AM)
-Set-ItemProperty -Path $AUPath -Name "SetActiveHours"      -Value 1 -Type DWord -ErrorAction SilentlyContinue
-Set-ItemProperty -Path $AUPath -Name "ActiveHoursStart"    -Value 8 -Type DWord
-Set-ItemProperty -Path $AUPath -Name "ActiveHoursEnd"      -Value 2 -Type DWord
-Write-Log "Updates deferred 7 days (quality) / 30 days (feature), force restart after deadline" "OK"
+$enableScheduledUpdates = $false
+if ($updatesConfig.ContainsKey("enable_scheduled_updates")) {
+    $enableScheduledUpdates = [bool]$updatesConfig["enable_scheduled_updates"]
+}
+
+$updateIntervalDays = 7
+if ($updatesConfig.ContainsKey("update_interval_days") -and [int]$updatesConfig["update_interval_days"] -gt 0) {
+    $updateIntervalDays = [int]$updatesConfig["update_interval_days"]
+}
+
+$scheduledUpdateTime = "4:00AM"
+if ($updatesConfig.ContainsKey("scheduled_update_time") -and $updatesConfig["scheduled_update_time"]) {
+    $scheduledUpdateTime = "$($updatesConfig["scheduled_update_time"])"
+}
+
+$pinCurrentFeatureRelease = $true
+if ($updatesConfig.ContainsKey("pin_current_feature_release")) {
+    $pinCurrentFeatureRelease = [bool]$updatesConfig["pin_current_feature_release"]
+}
+
+$targetReleaseVersion = ""
+if ($updatesConfig.ContainsKey("target_release_version") -and $updatesConfig["target_release_version"]) {
+    $targetReleaseVersion = "$($updatesConfig["target_release_version"])"
+}
+
+$osVersionPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+$osVersionInfo = Get-ItemProperty -Path $osVersionPath -ErrorAction SilentlyContinue
+$productVersion = $null
+if ($osVersionInfo) {
+    if ($osVersionInfo.ProductName -match "Windows 11") {
+        $productVersion = "Windows 11"
+    } elseif ($osVersionInfo.ProductName -match "Windows 10") {
+        $productVersion = "Windows 10"
+    }
+}
+
+if (-not $targetReleaseVersion -and $pinCurrentFeatureRelease -and $osVersionInfo) {
+    if ($osVersionInfo.DisplayVersion) {
+        $targetReleaseVersion = "$($osVersionInfo.DisplayVersion)"
+    } elseif ($osVersionInfo.ReleaseId) {
+        $targetReleaseVersion = "$($osVersionInfo.ReleaseId)"
+    }
+}
+
+Write-Log "Configuring uptime-safe Windows Update policy..."
+
+$wuValuesToRemove = @(
+    "DeferQualityUpdates",
+    "DeferQualityUpdatesPeriodInDays",
+    "DeferFeatureUpdates",
+    "DeferFeatureUpdatesPeriodInDays",
+    "SetComplianceDeadline",
+    "ConfigureDeadlineForQualityUpdates",
+    "ConfigureDeadlineForFeatureUpdates",
+    "ConfigureDeadlineGracePeriod",
+    "ConfigureDeadlineGracePeriodForFeatureUpdates"
+)
+foreach ($name in $wuValuesToRemove) {
+    if ($script:DryRunMode) {
+        Write-Log "[DRY RUN] Would remove registry: $WUPath\$name" "INFO"
+        $script:DryRunStats.Registry++
+    } else {
+        Remove-ItemProperty -Path $WUPath -Name $name -ErrorAction SilentlyContinue
+    }
+}
+
+$auValuesToRemove = @(
+    "ScheduledInstallTime",
+    "ScheduledInstallDay",
+    "AutomaticMaintenanceEnabled",
+    "AlwaysAutoRebootAtScheduledTime",
+    "AlwaysAutoRebootAtScheduledTimeMinutes",
+    "SetActiveHours",
+    "ActiveHoursStart",
+    "ActiveHoursEnd"
+)
+foreach ($name in $auValuesToRemove) {
+    if ($script:DryRunMode) {
+        Write-Log "[DRY RUN] Would remove registry: $AUPath\$name" "INFO"
+        $script:DryRunStats.Registry++
+    } else {
+        Remove-ItemProperty -Path $AUPath -Name $name -ErrorAction SilentlyContinue
+    }
+}
+
+$auOptionValue = if ($windowsUpdateInstallMode -eq "auto_download") { 3 } else { 2 }
+Set-RegistrySafe -Path $AUPath -Name "AUOptions" -Value $auOptionValue -Type DWord
+Set-RegistrySafe -Path $AUPath -Name "NoAutoRebootWithLoggedOnUsers" -Value 1 -Type DWord
+
+if ($windowsUpdateInstallMode -eq "auto_download") {
+    Write-Log "Windows Update set to auto-download and notify before install" "OK"
+} else {
+    Write-Log "Windows Update set to notify before download/install" "OK"
+}
+Write-Log "Forced restart deadlines and scheduled install windows removed" "OK"
+
+if ($pinCurrentFeatureRelease -and $targetReleaseVersion) {
+    if ($productVersion) {
+        Set-RegistrySafe -Path $WUPath -Name "ProductVersion" -Value $productVersion -Type String
+    }
+    Set-RegistrySafe -Path $WUPath -Name "TargetReleaseVersion" -Value 1 -Type DWord
+    Set-RegistrySafe -Path $WUPath -Name "TargetReleaseVersionInfo" -Value $targetReleaseVersion -Type String
+    Write-Log "Feature updates pinned to $targetReleaseVersion" "OK"
+} else {
+    foreach ($name in @("ProductVersion", "TargetReleaseVersion", "TargetReleaseVersionInfo")) {
+        if ($script:DryRunMode) {
+            Write-Log "[DRY RUN] Would remove registry: $WUPath\$name" "INFO"
+            $script:DryRunStats.Registry++
+        } else {
+            Remove-ItemProperty -Path $WUPath -Name $name -ErrorAction SilentlyContinue
+        }
+    }
+    Write-Log "Feature release pin disabled - future feature updates may be offered automatically" "WARN"
+}
 
 # ============================================================================
 # System Restore
@@ -404,7 +499,7 @@ try {
     $searchResult = $updateSearcher.Search("IsInstalled=0")
     $pendingCount = $searchResult.Updates.Count
     if ($pendingCount -gt 0) {
-        Write-Log "$pendingCount update(s) available - they will install at 3 AM per policy" "INFO"
+        Write-Log "$pendingCount update(s) available - manual install is required per policy" "INFO"
         foreach ($update in $searchResult.Updates) {
             Write-Log "  Pending: $($update.Title)" "INFO"
         }
@@ -418,28 +513,52 @@ try {
 # ============================================================================
 # Weekly Update Scheduled Task
 # ============================================================================
-Write-Log "Creating weekly update scheduled task..."
+$updateTaskName = "WinInit-WeeklyUpdate"
 $updateScript = Join-Path $PSScriptRoot "..\update.ps1"
-if (Test-Path $updateScript) {
-    $updateScriptFull = (Resolve-Path $updateScript).Path
-    try {
-        $action = New-ScheduledTaskAction -Execute "powershell.exe" `
-            -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$updateScriptFull`" -Silent"
-        $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At "4:00AM"
-        $settings = New-ScheduledTaskSettingsSet `
-            -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-            -StartWhenAvailable -RunOnlyIfNetworkAvailable
-        $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+if ($enableScheduledUpdates) {
+    Write-Log "Scheduled package updates enabled - creating recurring WinInit update task..."
+    if (Test-Path $updateScript) {
+        $updateScriptFull = (Resolve-Path $updateScript).Path
+        try {
+            if ($script:DryRunMode) {
+                Write-Log "[DRY RUN] Would register scheduled task '$updateTaskName' every $updateIntervalDays day(s) at $scheduledUpdateTime" "INFO"
+            } else {
+                $action = New-ScheduledTaskAction -Execute "powershell.exe" `
+                    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$updateScriptFull`" -Silent"
+                $trigger = New-ScheduledTaskTrigger -Daily -DaysInterval $updateIntervalDays -At $scheduledUpdateTime
+                $settings = New-ScheduledTaskSettingsSet `
+                    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+                    -StartWhenAvailable -RunOnlyIfNetworkAvailable
+                $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 
-        Register-ScheduledTask -TaskName "WinInit-WeeklyUpdate" `
-            -Action $action -Trigger $trigger -Settings $settings `
-            -Principal $principal -Force -ErrorAction Stop | Out-Null
-        Write-Log "Weekly update task created (Mondays 4:00 AM)" "OK"
-    } catch {
-        Write-Log "Failed to create scheduled task: $_" "WARN"
+                Register-ScheduledTask -TaskName $updateTaskName `
+                    -Action $action -Trigger $trigger -Settings $settings `
+                    -Principal $principal -Force -ErrorAction Stop | Out-Null
+            }
+            Write-Log "Scheduled package update task configured for every $updateIntervalDays day(s) at $scheduledUpdateTime" "OK"
+        } catch {
+            Write-Log "Failed to create scheduled task: $_" "WARN"
+        }
+    } else {
+        Write-Log "update.ps1 not found at $updateScript - skipping scheduled task" "WARN"
     }
 } else {
-    Write-Log "update.ps1 not found at $updateScript - skipping scheduled task" "WARN"
+    Write-Log "Scheduled package updates disabled - ensuring no WinInit update task remains..."
+    try {
+        if ($script:DryRunMode) {
+            Write-Log "[DRY RUN] Would remove scheduled task '$updateTaskName' if present" "INFO"
+        } else {
+            $existingTask = Get-ScheduledTask -TaskName $updateTaskName -ErrorAction SilentlyContinue
+            if ($existingTask) {
+                Unregister-ScheduledTask -TaskName $updateTaskName -Confirm:$false -ErrorAction Stop
+                Write-Log "Removed scheduled task '$updateTaskName'" "OK"
+            } else {
+                Write-Log "No existing scheduled task '$updateTaskName' found" "OK"
+            }
+        }
+    } catch {
+        Write-Log "Failed to remove scheduled task '$updateTaskName': $_" "WARN"
+    }
 }
 
 # ============================================================================
