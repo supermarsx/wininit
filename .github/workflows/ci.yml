@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    name: Format / Lint / Test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Format (check)
+        shell: pwsh
+        run: ./devscripts/format.ps1 -Check
+
+      - name: Lint
+        shell: pwsh
+        run: ./devscripts/lint.ps1
+
+      - name: Typecheck
+        shell: pwsh
+        run: ./devscripts/typecheck.ps1
+
+      - name: Tests (dry-run)
+        shell: pwsh
+        run: ./devscripts/test.ps1 -DryRun
+
+  build:
+    name: Build
+    needs: check
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_release: ${{ steps.version.outputs.is_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version (YY.N)
+        id: version
+        shell: pwsh
+        run: |
+          $current = (Get-Content VERSION -Raw).Trim()
+          $yy = (Get-Date).ToString("yy")
+          $parts = $current -split '\.'
+          if ($parts[0] -eq $yy) {
+            $next = "$yy.$([int]$parts[1] + 1)"
+          } else {
+            $next = "$yy.1"
+          }
+
+          # Skip any tag that already exists (release tracking safety net)
+          git fetch --tags --quiet
+          while (git rev-parse "refs/tags/$next" 2>$null) {
+            $n = [int](($next -split '\.')[1]) + 1
+            $next = "$yy.$n"
+          }
+
+          $isRelease = "${{ github.event_name }}" -eq "push" -and "${{ github.ref }}" -eq "refs/heads/main"
+          "version=$next"            | Out-File -Append $env:GITHUB_OUTPUT
+          "is_release=$isRelease"    | Out-File -Append $env:GITHUB_OUTPUT
+          Write-Host "Next version: $next (release=$isRelease)"
+
+      - name: Stamp VERSION for build
+        shell: pwsh
+        run: Set-Content VERSION "${{ steps.version.outputs.version }}`n" -NoNewline:$false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-stamped
+          path: |
+            .
+            !dist
+            !.git
+
+  package:
+    name: Package
+    needs: build
+    runs-on: windows-latest
+    outputs:
+      version: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: source-stamped
+          path: .
+
+      - name: Package
+        shell: pwsh
+        run: ./devscripts/package.ps1 -Version "${{ needs.build.outputs.version }}" -OutputDir dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wininit-${{ needs.build.outputs.version }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    name: Release
+    needs: [build, package]
+    if: needs.build.outputs.is_release == 'True'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: wininit-${{ needs.build.outputs.version }}
+          path: dist
+
+      - name: Commit VERSION bump
+        shell: pwsh
+        run: |
+          $v = "${{ needs.build.outputs.version }}"
+          Set-Content VERSION "$v`n" -NoNewline:$false
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VERSION
+          if (-not (git diff --cached --quiet; $LASTEXITCODE)) {
+            git commit -m "release: $v [skip ci]"
+            git push origin HEAD:main
+          }
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $v = "${{ needs.build.outputs.version }}"
+          gh release create "$v" dist/*.zip `
+            --title "$v" `
+            --generate-notes `
+            --target main
