@@ -19,18 +19,16 @@
 **One-liner** (paste into an elevated PowerShell window):
 
 ```powershell
-irm https://raw.githubusercontent.com/USER/wininit/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/supermarsx/wininit/main/install.ps1 | iex
 ```
 
 Or clone and run manually:
 
 ```powershell
-git clone https://github.com/USER/wininit.git
+git clone https://github.com/supermarsx/wininit.git
 cd wininit
 .\launch.bat
 ```
-
-> **Note:** Replace `USER` with the actual GitHub username or organization.
 
 ---
 
