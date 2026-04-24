@@ -14,24 +14,45 @@ concurrency:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
-  check:
-    name: Format / Lint / Test
+  format:
+    name: Format
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Format (check)
         shell: pwsh
         run: ./devscripts/format.ps1 -Check
 
+  lint:
+    name: Lint
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
       - name: Lint
         shell: pwsh
         run: ./devscripts/lint.ps1
 
+  typecheck:
+    name: Typecheck
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
       - name: Typecheck
         shell: pwsh
         run: ./devscripts/typecheck.ps1
+
+  test:
+    name: Test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
 
       - name: Tests (dry-run)
         shell: pwsh
@@ -39,13 +60,13 @@ jobs:
 
   build:
     name: Build
-    needs: check
+    needs: [format, lint, typecheck, test]
     runs-on: windows-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
       is_release: ${{ steps.version.outputs.is_release }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -114,7 +135,7 @@ jobs:
     if: needs.build.outputs.is_release == 'True'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
