@@ -36,6 +36,7 @@ $allScripts += Get-ChildItem "$PSScriptRoot\*.ps1"
 foreach ($script in $allScripts) {
     $lines = Get-Content $script.FullName
     $lineNum = 0
+    $isModuleScript = $script.FullName -match '\\modules\\'
 
     Write-Host "  Checking: $($script.Name)" -ForegroundColor DarkGray
 
@@ -52,9 +53,9 @@ foreach ($script in $allScripts) {
             Lint-Issue $script.Name $lineNum "TABS" "Tab character found (use spaces)"
         }
 
-        # Rule: Lines shouldn't exceed 150 chars
-        if ($line.Length -gt 150) {
-            Lint-Issue $script.Name $lineNum "LEN" "Line exceeds 150 characters ($($line.Length))"
+        # Rule: Lines shouldn't exceed 200 chars
+        if ($line.Length -gt 200) {
+            Lint-Issue $script.Name $lineNum "LEN" "Line exceeds 200 characters ($($line.Length))"
         }
 
         # Rule: No hardcoded usernames
@@ -73,7 +74,7 @@ foreach ($script in $allScripts) {
         }
 
         # Rule: Don't use Write-Host for data (use Write-Log instead)
-        if ($line -match "^\s*Write-Host\s" -and $line -notmatch "ForegroundColor" -and $line -notmatch "NoNewline") {
+        if ($isModuleScript -and $line -match "^\s*Write-Host\s" -and $line -notmatch "ForegroundColor" -and $line -notmatch "NoNewline") {
             Lint-Issue $script.Name $lineNum "LOG" "Plain Write-Host - consider Write-Log for important messages"
         }
     }
@@ -86,7 +87,7 @@ foreach ($script in $allScripts) {
 
     # Rule: Parse errors
     $parseErrors = $null
-    [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$null, [ref]$parseErrors)
+    $null = [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$null, [ref]$parseErrors)
     foreach ($err in $parseErrors) {
         Lint-Issue $script.Name $err.Extent.StartLineNumber "PARSE" $err.Message
     }

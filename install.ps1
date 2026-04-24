@@ -1,4 +1,4 @@
-# WinInit Quick Installer - Downloads and runs WinInit
+﻿# WinInit Quick Installer - Downloads and runs WinInit
 # Usage: irm https://raw.githubusercontent.com/USER/wininit/main/install.ps1 | iex
 
 #Requires -RunAsAdministrator

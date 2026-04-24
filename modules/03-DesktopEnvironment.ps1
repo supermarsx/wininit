@@ -1170,8 +1170,22 @@ Write-Log "Removing Microsoft Account integration from Settings..."
 # Hide accounts-related Settings pages
 $settingsExplorer = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer"
 if (-not (Test-Path $settingsExplorer)) { New-Item -Path $settingsExplorer -Force | Out-Null }
+$hiddenSettingsPages = @(
+    "sync",
+    "backup",
+    "findmydevice",
+    "windowsinsider",
+    "onedrive",
+    "yourinfo",
+    "emailandaccounts",
+    "signinoptions-launchfaceenrollment",
+    "signinoptions-launchfingerprintenrollment",
+    "signinoptions-launchsecuritykeyenrollment",
+    "recovery",
+    "otherusers"
+) -join ";"
 Set-ItemProperty -Path $settingsExplorer -Name "SettingsPageVisibility" `
-    -Value "hide:sync;backup;findmydevice;windowsinsider;onedrive;yourinfo;emailandaccounts;signinoptions-launchfaceenrollment;signinoptions-launchfingerprintenrollment;signinoptions-launchsecuritykeyenrollment;recovery;otherusers" `
+    -Value "hide:$hiddenSettingsPages" `
     -Type String -ErrorAction SilentlyContinue
 # Disable Windows Backup service
 Stop-Service -Name "WBackup" -Force -ErrorAction SilentlyContinue

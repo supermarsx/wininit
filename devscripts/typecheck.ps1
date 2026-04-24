@@ -72,10 +72,21 @@ foreach ($scriptFile in $allScripts) {
         Type-Issue $scriptFile.Name "CONCAT" "Heavy string concatenation ($($concatMatches.Count) instances) - consider interpolation"
     }
 
-    # Unquoted variable expansion in paths
-    $pathMatches = [regex]::Matches($content, 'Join-Path\s+\$\w+\s+[^"$]')
-    foreach ($m in $pathMatches) {
-        Type-Issue $scriptFile.Name "PATH" "Unquoted Join-Path argument near: $($m.Value.Trim().Substring(0, [Math]::Min(50, $m.Value.Trim().Length)))"
+    # Suspicious Join-Path usage (missing child path argument)
+    $joinPathCalls = $ast.FindAll({
+        param($node)
+        $node -is [System.Management.Automation.Language.CommandAst] -and
+        $node.GetCommandName() -eq "Join-Path"
+    }, $true)
+    foreach ($call in $joinPathCalls) {
+        $args = @(
+            $call.CommandElements |
+            Select-Object -Skip 1 |
+            Where-Object { $_ -isnot [System.Management.Automation.Language.CommandParameterAst] }
+        )
+        if ($args.Count -lt 2) {
+            Type-Issue $scriptFile.Name "PATH" "Join-Path call is missing a child path argument"
+        }
     }
 
     # Comparison with $null on wrong side

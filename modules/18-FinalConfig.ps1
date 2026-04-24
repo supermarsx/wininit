@@ -1,4 +1,4 @@
-# Module: 18 - Final Config
+﻿# Module: 18 - Final Config
 # Windows Update + System Restore + Startup/session restore + Explorer restart + done message
 
 Write-Section "Final Config" "Windows Update, System Restore, startup cleanup"
@@ -288,7 +288,7 @@ foreach ($r32 in $run32Paths) {
                 $_.Name -notin @("PSPath", "PSParentPath", "PSChildName", "PSDrive", "PSProvider")
             }
             foreach ($prop in $props) {
-                # Only remove known bloat — leave Windows/driver RunOnce entries alone
+                # Only remove known bloat - leave Windows/driver RunOnce entries alone
                 $isBloat = $prop.Name -match "(?i)(WextractCleanup|Uninstall|AdobeAAM|GoogleUpdate|CCleaner|Opera|Brave)"
                 if ($isBloat) {
                     Remove-ItemProperty -Path $r32 -Name $prop.Name -ErrorAction SilentlyContinue

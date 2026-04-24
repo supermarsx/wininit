@@ -105,7 +105,7 @@ if ($nodePath -and $npmPath) {
 } else {
     Write-Log "Installing Node.js..."
 
-    # Method 1 (fastest): direct zip download from nodejs.org — no package manager overhead
+    # Method 1 (fastest): direct zip download from nodejs.org - no package manager overhead
     $nodeInstalled = $false
     try {
         $ProgressPreference = 'SilentlyContinue'
@@ -365,7 +365,7 @@ if ($npmPath) {
     if ($npmNeeded.Count -eq 0) {
         Write-Log "npm: all $($npmAllPackages.Count) packages already installed" "OK"
     } else {
-        # Batch install all at once (MUCH faster — single dependency resolution)
+        # Batch install all at once (MUCH faster - single dependency resolution)
         $npmPkgList = $npmNeeded -join " "
         Start-Spinner "npm: installing $($npmNeeded.Count) packages (batch)..."
 
@@ -1050,7 +1050,7 @@ if (Test-Path $sdkmanager) {
     }
 
     # Direct download map: bypass sdkmanager for speed (just zips from dl.google.com)
-    # sdkmanager starts a JVM + resolves XML manifests for each call — direct HTTP is 10x faster
+    # sdkmanager starts a JVM + resolves XML manifests for each call - direct HTTP is 10x faster
     # Try to resolve URLs dynamically from the SDK repository manifest
     $sdkDirectDownloads = @()
     $sdkBaseUrl = "https://dl.google.com/android/repository/"
@@ -1138,7 +1138,7 @@ if (Test-Path $sdkmanager) {
     $sdkInstalled = 0
     $sdkFailed = 0
 
-    # usb_driver handled separately — it's optional (only for physical USB device debugging)
+    # usb_driver handled separately - it's optional (only for physical USB device debugging)
     # and has a 3-level directory structure that confuses the generic extract logic
     $usbDriverDir = Join-Path $androidSdkRoot "extras\google\usb_driver"
     if (-not (Test-Path $usbDriverDir)) {
@@ -1249,7 +1249,7 @@ if (Test-Path $sdkmanager) {
             } -ArgumentList $jobEntry, $jobSdkRoot
         }
 
-        # Launch sdkmanager in a separate process (not Start-Job — avoids console/Wait issues)
+        # Launch sdkmanager in a separate process (not Start-Job - avoids console/Wait issues)
         $sdkMgrProc = $null
         if ($sdkMgrNeeded.Count -gt 0) {
             $yesFile = Join-Path $env:TEMP "sdk-yes-parallel.txt"
@@ -1273,7 +1273,7 @@ if (Test-Path $sdkmanager) {
         $sdkMgrNames = ($sdkMgrNeeded | ForEach-Object { ($_ -split ";")[-1] }) -join "+"
 
         # Poll ALL tasks (download jobs + sdkmanager process) with live spinner
-        # No artificial deadline — just wait until everything finishes
+        # No artificial deadline - just wait until everything finishes
         $allDone = $false
         while (-not $allDone) {
             # Check direct download jobs
@@ -1552,7 +1552,7 @@ if ($pythonExe) {
             }
         }
     } else {
-        # No background job — pip was either already done or python wasn't found at launch
+        # No background job - pip was either already done or python wasn't found at launch
         # Check again now (python might have been installed by a module since)
         $pythonNow = Get-Command python -ErrorAction SilentlyContinue
         if ($pythonNow -and -not $bgPipJob) {

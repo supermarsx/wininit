@@ -34,6 +34,28 @@ $script:Results = @()
 $script:CurrentSuite = ""
 $projectRoot = Resolve-Path "$PSScriptRoot\.."
 
+function Test-ContainsCodePointRange {
+    param(
+        [AllowNull()]
+        [string]$Text,
+        [int]$Start,
+        [int]$End
+    )
+
+    if ([string]::IsNullOrEmpty($Text)) {
+        return $false
+    }
+
+    foreach ($ch in $Text.ToCharArray()) {
+        $codePoint = [int][char]$ch
+        if ($codePoint -ge $Start -and $codePoint -le $End) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
 # --- Test Framework ---
 function Test-Assert {
     param(
@@ -184,7 +206,10 @@ if (& $shouldRun "structure") {
     # Verify init.ps1 structure
     $initContent = Get-Content "$projectRoot\init.ps1" -Raw
     Test-Assert "init.ps1 has preflight checks" { $initContent -match "Preflight" }
-    Test-Assert "init.ps1 has module execution loop" { $initContent -match "foreach.*\`$mod.*in.*\`$modules" }
+    Test-Assert "init.ps1 has module execution loop" {
+        $initContent -match "foreach.*\`$mod.*in.*\`$modules" -or
+        $initContent -match "for\s*\(\s*\`$i\s*=\s*0;\s*\`$i\s*-lt\s*\`$modules\.Count;\s*\`$i\+\+\s*\)"
+    }
     Test-Assert "init.ps1 has error handling (try/catch)" { $initContent -match "try\s*\{" }
     Test-Assert "init.ps1 has summary section" { $initContent -match "Final Summary" }
 
@@ -218,7 +243,7 @@ if (& $shouldRun "syntax") {
 
     foreach ($s in $allScripts) {
         $errors = $null
-        [System.Management.Automation.Language.Parser]::ParseFile($s.FullName, [ref]$null, [ref]$errors)
+        $null = [System.Management.Automation.Language.Parser]::ParseFile($s.FullName, [ref]$null, [ref]$errors)
         Test-Assert "Syntax: $($s.Name)" { $errors.Count -eq 0 } `
             -FailMessage "$($errors.Count) parse error(s): $(($errors | Select-Object -First 3 | ForEach-Object { "L$($_.Extent.StartLineNumber)" }) -join ', ')"
     }
@@ -268,8 +293,8 @@ if (& $shouldRun "encoding") {
 
         # Check for other problematic Unicode (box-drawing, block elements)
         $content = Get-Content $f.FullName -Raw -ErrorAction SilentlyContinue
-        $hasBoxDrawing = $content -match '[\x{2500}-\x{257F}]'  # Box Drawing block
-        $hasBlockElements = $content -match '[\x{2580}-\x{259F}]'  # Block Elements
+        $hasBoxDrawing = Test-ContainsCodePointRange -Text $content -Start 0x2500 -End 0x257F
+        $hasBlockElements = Test-ContainsCodePointRange -Text $content -Start 0x2580 -End 0x259F
         # These are OK in devscripts (display only) but not in modules
         if ($f.FullName -match "\\modules\\") {
             Test-Assert "No box-drawing chars: $($f.Name)" { -not $hasBoxDrawing }

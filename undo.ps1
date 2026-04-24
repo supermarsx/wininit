@@ -1,4 +1,4 @@
-#Requires -RunAsAdministrator
+﻿#Requires -RunAsAdministrator
 # ============================================================================
 # WinInit Undo - Reverts all changes recorded in rollback.json
 # Self-contained: does NOT require lib/common.ps1

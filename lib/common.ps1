@@ -51,7 +51,7 @@ public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
 Enable-VTMode
 
 # ANSI escape sequences
-# Color map — use $script:Colors (not $c which can be shadowed by dot-sourced modules)
+# Color map - use $script:Colors (not $c which can be shadowed by dot-sourced modules)
 $script:E = [char]27
 $script:Colors = @{
     Reset      = "$([char]27)[0m"
@@ -699,7 +699,7 @@ function Write-WTSettings {
 
     $json = $Config | ConvertTo-Json -Depth 20
 
-    # Post-process: fix $false serialization — ensure "hidden": false is explicit, not null
+    # Post-process: fix $false serialization - ensure "hidden": false is explicit, not null
     $json = $json -replace '"hidden":\s*null', '"hidden": false'
 
     # Validate JSON round-trip before writing
@@ -712,7 +712,7 @@ function Write-WTSettings {
 
     # Stop Windows Terminal briefly to prevent FileSystemWatcher race
     $wtProc = Get-Process -Name "WindowsTerminal" -ErrorAction SilentlyContinue
-    # Don't kill WT — just write atomically and let it reload
+    # Don't kill WT - just write atomically and let it reload
 
     # Atomic write: temp file → delete target → rename temp (NTFS atomic on same volume)
     $tempFile = "$path.wininit.tmp"
@@ -777,7 +777,7 @@ function Get-WTProfilesList {
 }
 
 function Repair-WTSettings {
-    # Full validation and repair — ensures valid JSON with visible profiles
+    # Full validation and repair - ensures valid JSON with visible profiles
     $config = Read-WTSettings
     $repaired = $false
 
@@ -819,7 +819,7 @@ function Repair-WTSettings {
     $hasVisible = $false
     if ($hasList) {
         foreach ($p in @($existingList)) {
-            # Check hidden property carefully — treat missing, $false, and $null as visible
+            # Check hidden property carefully - treat missing, $false, and $null as visible
             $isHidden = $false
             if ($p.PSObject.Properties.Name -contains "hidden") {
                 $isHidden = $p.hidden -eq $true

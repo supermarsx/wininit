@@ -1,4 +1,4 @@
-# ============================================================================
+﻿# ============================================================================
 # WinInit - Progress Dashboard
 # Persistent status line showing overall weighted progress, ETA, and stats
 # ============================================================================
@@ -177,7 +177,7 @@ function Show-Dashboard {
 
 # ============================================================================
 # Write-DashboardSummary
-# Called at the very end — generates a rich completion summary
+# Called at the very end - generates a rich completion summary
 # ============================================================================
 
 function Write-DashboardSummary {

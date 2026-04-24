@@ -269,7 +269,7 @@ if (Test-Path "$sciteDir\SciTE.exe") {
     $darkProps = @"
 # === WinInit Dark Theme for SciTE4AutoIt ===
 
-# ── Global default style (applies to all languages) ──
+# -- Global default style (applies to all languages) --
 style.*.32=back:#1E1E1E,fore:#D4D4D4,font:Consolas,size:10
 # Line-number margin
 style.*.33=back:#252526,fore:#858585,size:8
@@ -277,7 +277,7 @@ style.*.33=back:#252526,fore:#858585,size:8
 style.*.34=fore:#DCDCAA,bold,back:#1E1E1E
 style.*.35=fore:#F44747,bold,back:#1E1E1E
 
-# ── Editor chrome ──
+# -- Editor chrome --
 caret.fore=#AEAFAD
 caret.line.back=#2A2D2E
 selection.back=#264F78
@@ -287,7 +287,7 @@ fold.margin.colour=#1E1E1E
 fold.margin.highlight.colour=#1E1E1E
 calltip.back=#252526
 
-# ── AutoIt syntax (style.au3.*) ──
+# -- AutoIt syntax (style.au3.*) --
 # 0=default, 1=comment, 2=comment-block, 3=number, 4=function,
 # 5=keyword, 6=macro, 7=string, 8=operator, 9=variable,
 # 10=sent, 11=pre-processor, 12=special, 13=expand, 15=comobj
@@ -307,19 +307,19 @@ style.au3.12=fore:#DCDCAA,back:#1E1E1E,bold
 style.au3.13=fore:#9CDCFE,back:#1E1E1E
 style.au3.15=fore:#4EC9B0,back:#1E1E1E
 
-# ── Output pane ──
+# -- Output pane --
 style.errorlist.32=back:#1E1E1E,fore:#D4D4D4
 style.errorlist.0=fore:#D4D4D4,back:#1E1E1E
 style.errorlist.2=fore:#F44747,back:#1E1E1E
 
-# ── Properties files ──
+# -- Properties files --
 style.props.0=fore:#D4D4D4,back:#1E1E1E
 style.props.1=fore:#6A9955,back:#1E1E1E
 style.props.2=fore:#569CD6,back:#1E1E1E
 style.props.3=fore:#CE9178,back:#1E1E1E
 style.props.5=fore:#9CDCFE,back:#1E1E1E
 
-# ── Misc settings ──
+# -- Misc settings --
 output.magnification=-1
 highlight.current.word=1
 highlight.current.word.colour=#3A3D41

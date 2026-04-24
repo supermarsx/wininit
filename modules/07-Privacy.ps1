@@ -1,4 +1,4 @@
-# Module: 07 - Privacy
+﻿# Module: 07 - Privacy
 # Comprehensive privacy hardening: telemetry, ads, tracking, location,
 # camera/mic, inking, tips, error reporting, Cortana, Copilot, feedback, hosts
 

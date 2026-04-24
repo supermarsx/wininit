@@ -1,4 +1,4 @@
-#Requires -RunAsAdministrator
+﻿#Requires -RunAsAdministrator
 # ============================================================================
 # WinInit Update - Keep installed software up to date
 # Standalone companion script for post-install maintenance

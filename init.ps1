@@ -488,7 +488,7 @@ $rebootKeys = @(
 foreach ($rk in $rebootKeys) {
     if (Test-Path $rk) { $pendingReboot = $true; break }
 }
-# PendingFileRenameOperations is a registry value, not a key — Test-Path doesn't work on values
+# PendingFileRenameOperations is a registry value, not a key - Test-Path doesn't work on values
 if (-not $pendingReboot) {
     $pfrOps = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name "PendingFileRenameOperations" -ErrorAction SilentlyContinue
     if ($pfrOps) { $pendingReboot = $true }
