@@ -1,5 +1,19 @@
 <h1 align="center">WinInit</h1>
 <p align="center">
+  <a href="https://github.com/supermarsx/wininit/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/supermarsx/wininit/ci.yml?branch=main&style=flat-square&label=CI&logo=githubactions&logoColor=white" alt="CI status">
+  </a>
+  <a href="https://github.com/supermarsx/wininit">
+    <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fsupermarsx%2Fwininit%2Fmain%2F.github%2Fbadges%2Fversion.json&style=flat-square" alt="Version badge">
+  </a>
+  <a href="https://learn.microsoft.com/powershell/">
+    <img src="https://img.shields.io/badge/built%20with-PowerShell-5391FE?style=flat-square&logo=powershell&logoColor=white" alt="Built with PowerShell">
+  </a>
+  <a href="https://github.com/supermarsx/wininit/blob/main/license.md">
+    <img src="https://img.shields.io/badge/license-MIT-111111?style=flat-square" alt="MIT License">
+  </a>
+</p>
+<p align="center">
   <strong>Windows Initialization & Customization Script</strong><br>
   18 Modules | Full Automation | Zero Interaction
 </p>
@@ -38,6 +52,7 @@ cd wininit
 - **18 modular stages** -- skip any module, run any subset
 - **6 built-in profiles** -- developer, security, minimal, creative, office, full
 - **TOML configuration** -- fine-grained control without editing scripts
+- **Automatic version bumping** -- CI stamps `VERSION` and the release badge from one script
 - **Uptime-safe Windows Update defaults** -- notify/manual installs, no forced restart deadlines, feature-release pinning
 - **Checkpoint/Resume** -- survives reboots and Ctrl+C interruptions
 - **Full rollback** -- every change is recorded; `undo.ps1` reverts them

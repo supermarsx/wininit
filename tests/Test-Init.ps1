@@ -372,7 +372,7 @@ if (& $shouldRun "devscripts-structure") {
 
     $devscriptsDir = Join-Path $projectRoot "devscripts"
 
-    $devscripts = @("ci", "format", "lint", "test", "typecheck", "package", "run-module")
+    $devscripts = @("ci", "format", "lint", "test", "typecheck", "package", "run-module", "bump-version")
     foreach ($ds in $devscripts) {
         $dsPath = Join-Path $devscriptsDir "$ds.ps1"
         Test-Assert "devscripts/$ds.ps1 parses without errors" {

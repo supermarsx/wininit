@@ -187,7 +187,7 @@ if (& $shouldRun "structure") {
     }
 
     # Verify devscripts
-    $expectedDevscripts = @("ci", "format", "lint", "typecheck", "test", "package", "run-module")
+    $expectedDevscripts = @("ci", "format", "lint", "typecheck", "test", "package", "run-module", "bump-version")
     foreach ($ds in $expectedDevscripts) {
         Test-Assert "Devscript $ds.ps1 exists" {
             Test-Path "$projectRoot\devscripts\$ds.ps1"

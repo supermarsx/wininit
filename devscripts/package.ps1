@@ -11,13 +11,18 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Auto-detect version from git tag or use date
+# Auto-detect version from VERSION, then git tag, then date
 if (-not $Version) {
-    $gitTag = git describe --tags --abbrev=0 2>$null
-    if ($gitTag) {
-        $Version = $gitTag -replace "^v", ""
+    $versionFile = Join-Path $PSScriptRoot "..\VERSION"
+    if (Test-Path $versionFile) {
+        $Version = (Get-Content $versionFile -Raw).Trim()
     } else {
-        $Version = Get-Date -Format "yyyy.MM.dd"
+        $gitTag = git describe --tags --abbrev=0 2>$null
+        if ($gitTag) {
+            $Version = $gitTag -replace "^v", ""
+        } else {
+            $Version = Get-Date -Format "yyyy.MM.dd"
+        }
     }
 }
 
@@ -50,6 +55,7 @@ $projectRoot = Resolve-Path "$PSScriptRoot\.."
 $filesToInclude = @(
     "launch.bat",
     "init.ps1",
+    "VERSION",
     "lib\common.ps1",
     "modules\*.ps1"
 )

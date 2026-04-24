@@ -74,30 +74,15 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $current = (Get-Content VERSION -Raw).Trim()
-          $yy = (Get-Date).ToString("yy")
-          $parts = $current -split '\.'
-          if ($parts[0] -eq $yy) {
-            $next = "$yy.$([int]$parts[1] + 1)"
-          } else {
-            $next = "$yy.1"
-          }
-
-          # Skip any tag that already exists (release tracking safety net)
-          git fetch --tags --quiet
-          while (git rev-parse "refs/tags/$next" 2>$null) {
-            $n = [int](($next -split '\.')[1]) + 1
-            $next = "$yy.$n"
-          }
-
+          $next = ./devscripts/bump-version.ps1 -Next -EnsureUniqueTag
           $isRelease = "${{ github.event_name }}" -eq "push" -and "${{ github.ref }}" -eq "refs/heads/main"
           "version=$next"            | Out-File -Append $env:GITHUB_OUTPUT
           "is_release=$isRelease"    | Out-File -Append $env:GITHUB_OUTPUT
           Write-Host "Next version: $next (release=$isRelease)"
 
-      - name: Stamp VERSION for build
+      - name: Stamp version metadata for build
         shell: pwsh
-        run: Set-Content VERSION "${{ steps.version.outputs.version }}`n" -NoNewline:$false
+        run: ./devscripts/bump-version.ps1 -Version "${{ steps.version.outputs.version }}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -149,10 +134,10 @@ jobs:
         shell: pwsh
         run: |
           $v = "${{ needs.build.outputs.version }}"
-          Set-Content VERSION "$v`n" -NoNewline:$false
+          ./devscripts/bump-version.ps1 -Version $v
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add VERSION
+          git add VERSION .github/badges/version.json
           if (-not (git diff --cached --quiet; $LASTEXITCODE)) {
             git commit -m "release: $v [skip ci]"
             git push origin HEAD:main
