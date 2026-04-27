@@ -138,9 +138,13 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add VERSION .github/badges/version.json
-          if (-not (git diff --cached --quiet; $LASTEXITCODE)) {
+          git diff --cached --quiet
+          $diffExit = $LASTEXITCODE
+          if ($diffExit -eq 1) {
             git commit -m "release: $v [skip ci]"
             git push origin HEAD:main
+          } elseif ($diffExit -ne 0) {
+            exit $diffExit
           }
 
       - name: Create GitHub Release
