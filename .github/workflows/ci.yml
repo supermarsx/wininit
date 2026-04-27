@@ -137,7 +137,7 @@ jobs:
           ./devscripts/bump-version.ps1 -Version $v
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add VERSION .github/badges/version.json
+          git add VERSION .github/badges/version.json readme.md
           git diff --cached --quiet
           $diffExit = $LASTEXITCODE
           if ($diffExit -eq 1) {

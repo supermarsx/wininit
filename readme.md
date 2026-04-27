@@ -17,6 +17,7 @@
   <strong>Windows Initialization & Customization Script</strong><br>
   18 Modules | Full Automation | Zero Interaction
 </p>
+<!-- version: 26.1 -->
 <p align="center">
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#features">Features</a> &bull;
@@ -52,7 +53,7 @@ cd wininit
 - **18 modular stages** -- skip any module, run any subset
 - **6 built-in profiles** -- developer, security, minimal, creative, office, full
 - **TOML configuration** -- fine-grained control without editing scripts
-- **Automatic version bumping** -- CI stamps `VERSION` and the release badge from one script
+- **Automatic version bumping** -- CI stamps `VERSION`, the release badge, and this README from one script
 - **Uptime-safe Windows Update defaults** -- notify/manual installs, no forced restart deadlines, feature-release pinning
 - **Checkpoint/Resume** -- survives reboots and Ctrl+C interruptions
 - **Full rollback** -- every change is recorded; `undo.ps1` reverts them

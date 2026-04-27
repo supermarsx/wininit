@@ -25,6 +25,7 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $versionFile = Join-Path $projectRoot "VERSION"
+$readmeFile = Join-Path $projectRoot "readme.md"
 $badgeDir = Join-Path $projectRoot ".github\badges"
 $badgeFile = Join-Path $badgeDir "version.json"
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
@@ -106,6 +107,19 @@ function Write-VersionFiles {
     } | ConvertTo-Json
 
     [System.IO.File]::WriteAllText($badgeFile, "$badgeData`n", $utf8NoBom)
+
+    if (-not (Test-Path $readmeFile)) {
+        throw "README file not found: $readmeFile"
+    }
+
+    $readmeContent = [System.IO.File]::ReadAllText($readmeFile)
+    $versionMarkerPattern = '<!-- version: \d{2}\.\d+ -->'
+    if ($readmeContent -notmatch $versionMarkerPattern) {
+        throw "README version marker not found."
+    }
+
+    $updatedReadme = $readmeContent -replace $versionMarkerPattern, "<!-- version: $Value -->"
+    [System.IO.File]::WriteAllText($readmeFile, $updatedReadme, $utf8NoBom)
 }
 
 $currentVersion = Get-CurrentVersion
