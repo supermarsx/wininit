@@ -75,8 +75,8 @@ function Resolve-UniqueVersion {
 
     $uniqueVersion = $Candidate
     while ($true) {
-        & git rev-parse --verify --quiet "refs/tags/$uniqueVersion" *> $null
-        if ($LASTEXITCODE -ne 0) {
+        $matchingTag = & git tag --list $uniqueVersion
+        if (-not $matchingTag) {
             return $uniqueVersion
         }
 
