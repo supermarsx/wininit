@@ -439,4 +439,4 @@ wininit/
 
 ## License
 
-[MIT](license.md) -- Copyright (c) 2026 Mariana
+Released under the MIT License. See [license.md](license.md) for details.
