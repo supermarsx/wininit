@@ -17,7 +17,7 @@
   <strong>Windows Initialization & Customization Script</strong><br>
   18 Modules | Full Automation | Zero Interaction
 </p>
-<!-- version: 26.1 -->
+<!-- version: 26.2 -->
 <p align="center">
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#features">Features</a> &bull;
