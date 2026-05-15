@@ -757,6 +757,17 @@ if (& $shouldRun "module-content") {
         Test-Assert "Mod11: Contains desktop icons configuration" {
             ($c11 -match 'desktop.*icon|HideDesktopIcons|NewStartPanel') -or ($c11 -match 'This PC|Desktop')
         }
+        Test-Assert "Mod11: Uses known-folder GUIDs for ThisPCPolicy" {
+            ($c11 -match 'FolderDescriptionGuid') -and
+            ($c11 -match '31C0DD25-9439-4F12-BF41-7FF4EDA38722') -and
+            ($c11 -match '4BD8D571-6D19-48D3-BE97-422220080E43') -and
+            ($c11 -match '18989B1D-99B5-455B-841C-AB7C74E4DDFC') -and
+            ($c11 -match '33E28130-4E1E-4676-835A-98395C3BC3BB')
+        }
+        Test-Assert "Mod11: Does not create FolderDescriptions from namespace GUIDs" {
+            $c11 -notmatch 'FolderDescriptions\\\$namespaceGuid\\PropertyBag' -and
+            $c11 -notmatch 'FolderDescriptions\\\$guid\\PropertyBag'
+        }
     }
 
     # --- Module 12: Security Hardening ---

@@ -106,35 +106,75 @@ Write-Log "All desktop icons hidden" "OK"
 
 # --- 11d. Remove 3D Objects, Music, Videos, Pictures from This PC Sidebar ---
 Write-Log "Removing 3D Objects, Music, Videos, Pictures from This PC sidebar..."
-$thisPcFolders = @{
-    # 3D Objects
-    "{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}" = "3D Objects"
-    # Music
-    "{3dfdf296-dbec-4fb4-81d1-6a3438bcf4de}" = "Music"
-    # Videos
-    "{f86fa3ab-70d2-4fc7-9c99-fcbf05467f3a}" = "Videos"
-    # Pictures
-    "{24ad3ad4-a569-4530-98e1-ab02f9417aa8}" = "Pictures"
-}
+$thisPcFolders = @(
+    @{
+        Name = "3D Objects"
+        NamespaceGuid = "{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}"
+        FolderDescriptionGuid = "{31C0DD25-9439-4F12-BF41-7FF4EDA38722}"
+    },
+    @{
+        Name = "Music"
+        NamespaceGuid = "{3dfdf296-dbec-4fb4-81d1-6a3438bcf4de}"
+        FolderDescriptionGuid = "{4BD8D571-6D19-48D3-BE97-422220080E43}"
+    },
+    @{
+        Name = "Videos"
+        NamespaceGuid = "{f86fa3ab-70d2-4fc7-9c99-fcbf05467f3a}"
+        FolderDescriptionGuid = "{18989B1D-99B5-455B-841C-AB7C74E4DDFC}"
+    },
+    @{
+        Name = "Pictures"
+        NamespaceGuid = "{24ad3ad4-a569-4530-98e1-ab02f9417aa8}"
+        FolderDescriptionGuid = "{33E28130-4E1E-4676-835A-98395C3BC3BB}"
+    }
+)
+$folderDescriptionsRoot = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FolderDescriptions"
 
-foreach ($guid in $thisPcFolders.Keys) {
-    $name = $thisPcFolders[$guid]
+foreach ($folder in $thisPcFolders) {
+    $name = $folder.Name
+    $namespaceGuid = $folder.NamespaceGuid
+    $folderDescriptionGuid = $folder.FolderDescriptionGuid
+
     # 64-bit path
-    $path64 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\$guid"
+    $path64 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\$namespaceGuid"
     if (Test-Path $path64) {
         Remove-Item $path64 -Force -ErrorAction SilentlyContinue
         Write-Log "Removed $name from This PC (64-bit)" "OK"
     }
     # 32-bit (WOW6432Node) path
-    $path32 = "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\$guid"
+    $path32 = "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Explorer\MyComputer\NameSpace\$namespaceGuid"
     if (Test-Path $path32) {
         Remove-Item $path32 -Force -ErrorAction SilentlyContinue
         Write-Log "Removed $name from This PC (32-bit)" "OK"
     }
-    # Also hide from "This PC" folder listing via ThisPCPolicy
-    $folderDescPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FolderDescriptions\$guid\PropertyBag"
-    if (-not (Test-Path $folderDescPath)) { New-Item -Path $folderDescPath -Force -ErrorAction SilentlyContinue | Out-Null }
-    Set-ItemProperty -Path $folderDescPath -Name "ThisPCPolicy" -Value "Hide" -Type String -ErrorAction SilentlyContinue
+
+    # Previous wininit versions accidentally created FolderDescriptions entries
+    # using namespace CLSIDs. Those malformed keys break Explorer rename/move.
+    $legacyBadFolderDescPath = "$folderDescriptionsRoot\$namespaceGuid"
+    if (Test-Path $legacyBadFolderDescPath) {
+        $legacyProps = Get-ItemProperty -Path $legacyBadFolderDescPath -ErrorAction SilentlyContinue
+        $legacySubkeys = @(Get-ChildItem -Path $legacyBadFolderDescPath -ErrorAction SilentlyContinue)
+        $hasOnlyPropertyBag = $legacySubkeys.Count -eq 1 -and $legacySubkeys[0].PSChildName -eq "PropertyBag"
+        if (-not $legacyProps.Name -and $null -eq $legacyProps.Category -and $hasOnlyPropertyBag) {
+            Remove-Item -Path $legacyBadFolderDescPath -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Log "Removed malformed legacy FolderDescriptions key for $name" "OK"
+        } else {
+            Write-Log "Skipped unexpected FolderDescriptions key for $name namespace GUID" "WARN"
+        }
+    }
+
+    # Also hide from "This PC" folder listing via ThisPCPolicy. This must be
+    # written under the known-folder description GUID, not the namespace CLSID.
+    $folderDescKey = "$folderDescriptionsRoot\$folderDescriptionGuid"
+    if (Test-Path $folderDescKey) {
+        $folderDescPath = "$folderDescKey\PropertyBag"
+        if (-not (Test-Path $folderDescPath)) {
+            New-Item -Path $folderDescPath -Force -ErrorAction SilentlyContinue | Out-Null
+        }
+        Set-ItemProperty -Path $folderDescPath -Name "ThisPCPolicy" -Value "Hide" -Type String -ErrorAction SilentlyContinue
+    } else {
+        Write-Log "FolderDescriptions key missing for $name; skipped ThisPCPolicy" "WARN"
+    }
 }
 Write-Log "3D Objects, Music, Videos, Pictures removed from This PC sidebar" "OK"
 
